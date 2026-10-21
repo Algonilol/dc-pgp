@@ -27,7 +27,7 @@ Discord already encrypts voice and video calls end-to-end – but not your text 
 - [Disclaimer](#disclaimer)
 - [License](#license)
 
-More details: [PROTOCOL.md](PROTOCOL.md) (wire format, key lifetime, vault) · [SECURITY.md](SECURITY.md) (threat model, reporting vulnerabilities) · [CONTRIBUTING.md](CONTRIBUTING.md)
+More details: [PROTOCOL.md](PROTOCOL.md) (wire format, key lifetime, vault) · [SECURITY.md](SECURITY.md) (threat model, reporting vulnerabilities) · [CONTRIBUTING.md](CONTRIBUTING.md) · [CHANGELOG.md](CHANGELOG.md) (what changed in each version)
 
 ## Features
 
