@@ -57,9 +57,21 @@ More details: [PROTOCOL.md](PROTOCOL.md) (wire format, key lifetime, vault) · [
 
 ## Installation (Windows)
 
-You need the Discord desktop app, [Git](https://git-scm.com) and [Node.js](https://nodejs.org) 20.11 or newer (LTS recommended). Custom plugins require building Vencord from source; see Vencord's guide on [installing custom plugins](https://docs.vencord.dev/installing/custom-plugins/).
+You need the Discord desktop app, [Git](https://git-scm.com) and [Node.js](https://nodejs.org) 20.11 or newer. If you don't have them yet: `winget install Git.Git` and `winget install OpenJS.NodeJS.LTS`, then open a new PowerShell window. Custom plugins require building Vencord from source; see Vencord's guide on [installing custom plugins](https://docs.vencord.dev/installing/custom-plugins/).
 
-Run the commands in a normal PowerShell window, **not as administrator**: it starts in your user folder, where they can create the `Vencord` folder.
+### Quick install
+
+Open a normal PowerShell window (**not as administrator**) and run:
+
+```powershell
+irm https://raw.githubusercontent.com/Algonilol/dc-pgp/main/install.ps1 | iex
+```
+
+The [installer](install.ps1) checks Git and Node.js, downloads Vencord and DcPgp into your user folder, builds them and patches Discord – choose your Discord with the arrow keys and press Enter. Then quit Discord completely, start it again and enable **DcPgp** under *Settings → Vencord → Plugins*. To update, run the same command again. It is short, so you can read it before you run it.
+
+### Manual install
+
+The same steps by hand, in a normal PowerShell window (**not as administrator**): it starts in your user folder, where they can create the `Vencord` folder.
 
 ```powershell
 git clone https://github.com/Vendicated/Vencord
@@ -79,7 +91,7 @@ Restart Discord and enable **DcPgp** under *Settings → Vencord → Plugins*.
 - **Names:** this repository is `dc-pgp`, the folder must be called `dcPgp.desktop`, and in Vencord's plugin list the plugin appears as **DcPgp**.
 - The folder name must end in `.desktop`: the plugin needs the desktop app's main process (device key, file dialogs, idle time, clipboard).
 - `pnpm inject` asks which Discord to patch (Stable, PTB, Canary): choose with the arrow keys and Enter, and run it once per installation.
-- **Update**: `git pull` in both folders, `npm ci --omit=dev` in the plugin folder, `corepack pnpm build`, then restart Discord completely.
+- **Update**: run the quick install command again – or by hand: `git pull` in both folders, `npm ci --omit=dev` in the plugin folder, `corepack pnpm build`, then restart Discord completely.
 - **Remove DcPgp**: switch it off in the plugin list, or delete the `dcPgp.desktop` folder and build again. Your encrypted vault stays in Discord's local storage; keep your key file, so you can still decrypt old messages (for example in Kleopatra).
 - **Uninstall Vencord** from Discord: `corepack pnpm uninject`.
 - The Vencord team does not support custom plugins. Please report problems here, not to them.
@@ -109,6 +121,7 @@ Your vault actions (change password, save key file, show or remove the stored pr
 
 ## Security notes
 
+- **No connections of its own.** DcPgp sends nothing anywhere except the messages you send through Discord itself: no telemetry, no update checks, no servers of its own. Like every Vencord plugin it runs inside Discord with full access to the client – the code is open, so you can check that.
 - **Compare safety numbers.** Until you do, a contact's key is trusted on first use – Discord carried it, so Discord could have swapped it.
 - **Your password cannot be reset.** The key file (with its own password) is your only recovery. Keep it offline, e.g. on a USB stick.
 - **The vault is bound to this PC.** The vault password alone does not open it elsewhere, because a device key protected by Windows (DPAPI) is mixed in. To move to another PC, use a vault backup or your key file.
