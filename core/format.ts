@@ -13,6 +13,8 @@ export const KEYREQ_HINT = "-# 🔑 Key request · dcpgp/1 keyreq";
 export const KEYRESP_HINT = "-# 🔑 Key response · dcpgp/1 keyresp";
 /** An extended own key travels as a "keyresp", so clients that only know requests and responses keep working. */
 export const KEYUPD_HINT = "-# 🔑 Key update · dcpgp/1 keyresp";
+/** Where to get DcPgp: a key request points people without the plugin there. */
+export const PROJECT_URL = "https://github.com/Algonilol/dc-pgp";
 
 const FENCE = "```";
 const PAD_BLOCK = 64;
@@ -39,8 +41,9 @@ export function buildMessageContent(armored: string): string {
 
 export function buildKeyMessageContent(kind: KeyMessageKind, armoredPublicKey: string): string {
     const hint = kind === "keyreq" ? KEYREQ_HINT : KEYRESP_HINT;
+    // In angle brackets, Discord shows the link without a preview card under the message.
     const text = kind === "keyreq"
-        ? "I'd like to chat with you end-to-end encrypted (DcPgp mod). Without the mod, you can ignore this message."
+        ? `I'd like to chat with you end-to-end encrypted with DcPgp, a Vencord plugin. Get it here: <${PROJECT_URL}> – without it, you can ignore this message.`
         : "I accepted your key request. From now on we can chat encrypted.";
     return `${hint}\n${text}\n${FENCE}\n${armoredPublicKey.trim()}\n${FENCE}`;
 }

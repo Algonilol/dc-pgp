@@ -53,7 +53,7 @@ Trust levels: **verified** (signature fine and the contact's safety number was c
 
 ````
 -# 🔑 Key request · dcpgp/1 keyreq
-I'd like to chat with you end-to-end encrypted (DcPgp mod). Without the mod, you can ignore this message.
+I'd like to chat with you end-to-end encrypted with DcPgp, a Vencord plugin. Get it here: <https://github.com/Algonilol/dc-pgp> – without it, you can ignore this message.
 ```
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 …

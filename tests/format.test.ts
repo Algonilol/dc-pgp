@@ -9,7 +9,7 @@ import { describe, it } from "node:test";
 import { utf8 } from "../core/bytes";
 import {
     buildInner, buildKeyMessageContent, buildMessageContent, checkInner, isEncryptedContent, isProtocolContent,
-    parseContent, parseInner, snowflakeToMs
+    parseContent, parseInner, PROJECT_URL, snowflakeToMs
 } from "../core/format";
 import { IDS } from "./helpers";
 
@@ -27,6 +27,11 @@ describe("Discord content", () => {
     it("recognises key requests and responses", () => {
         assert.deepEqual(parseContent(buildKeyMessageContent("keyreq", KEY)), { kind: "keyreq", armoredKey: KEY });
         assert.deepEqual(parseContent(buildKeyMessageContent("keyresp", KEY)), { kind: "keyresp", armoredKey: KEY });
+    });
+
+    it("a key request tells people without the plugin where to get it", () => {
+        assert.ok(buildKeyMessageContent("keyreq", KEY).includes(`<${PROJECT_URL}>`), "in angle brackets: no preview card");
+        assert.equal(buildKeyMessageContent("keyresp", KEY).includes(PROJECT_URL), false, "a response goes to someone who has it");
     });
 
     it("still reads messages from earlier versions with German hint lines", () => {
