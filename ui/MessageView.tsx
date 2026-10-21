@@ -13,8 +13,8 @@ import { canViewRawPgp, effectiveAutoDecrypt, hidesOriginal, messageDisplay, typ
 import { type KeyCardActionId, keyCardModel } from "../core/exchange";
 import { type KeyMessageKind, parseContent, snowflakeToMs } from "../core/format";
 import { formatFingerprint } from "../core/pgp";
-import type { DecryptedView } from "../core/receive";
-import { type DecryptEntry, type MessageLike, revealMessage, useDecryption } from "../discord/decrypt";
+import { type DecryptedView, markRepeated } from "../core/receive";
+import { type DecryptEntry, isRepeatedBlock, type MessageLike, revealMessage, useDecryption } from "../discord/decrypt";
 import { channelKind, nameOf } from "../discord/discordUtils";
 import { hideOriginalContent } from "../discord/hide";
 import { actOnKeyMessage, checkOfferedKey, type KeyCheck, openVerifyDialog } from "../discord/keyExchange";
@@ -85,7 +85,8 @@ function TrustBadge({ view }: { view: DecryptedView; }) {
     const state = view.trust === "verified" ? "on" : view.trust === "failed" ? "warning" : "off";
     const title = view.trust === "verified" ? "End-to-end encrypted · sender verified"
         : view.trust === "failed" ? "End-to-end encrypted · check failed"
-            : "End-to-end encrypted · sender not verified";
+            : view.findings.some(f => f.level === "warning") ? "End-to-end encrypted · see the warning"
+                : "End-to-end encrypted · sender not verified";
     const notes = view.findings.filter(f => f.level === "info");
     return (
         <Tooltip text={<>{title}{notes.map(f => <div key={f.code}>{f.text}</div>)}</>}>
@@ -98,13 +99,13 @@ function TrustBadge({ view }: { view: DecryptedView; }) {
     );
 }
 
-function Decrypted({ entry, message, blur }: { entry: DecryptEntry | null; message: AccessoryMessage; blur: boolean; }) {
+function Decrypted({ entry, message, blur, repeated }: { entry: DecryptEntry | null; message: AccessoryMessage; blur: boolean; repeated: boolean; }) {
     if (!entry || entry.status === "pending" || entry.status === "locked") return <Note text="Decrypting …" />;
     if (entry.status === "not-for-us") return <Note text="Encrypted message – not encrypted to your key." />;
     if (entry.status === "error" || !entry.view)
         return <div className="dcpgp-alert">⚠ This encrypted message is damaged or was altered and cannot be opened.</div>;
 
-    const { view } = entry;
+    const view = repeated ? markRepeated(entry.view) : entry.view;
     const errors = view.findings.filter(f => f.level === "error");
     const warnings = view.findings.filter(f => f.level === "warning");
     const className = [getMarkupClass(), "dcpgp-plain", blur && "dcpgp-blur", errors.length > 0 && "dcpgp-failed"].filter(Boolean).join(" ");
@@ -206,6 +207,7 @@ function MessageAccessory({ message }: { message: AccessoryMessage; }) {
     });
     const armored = parsed.kind === "message" ? parsed.armored : null;
     const entry = useDecryption(message, display.kind === "decrypt" ? armored : null);
+    const repeated = display.kind === "decrypt" && armored != null && entry?.status === "ok" && isRepeatedBlock(message, armored);
     const viewRaw = armored && canViewRawPgp(display, channelKind(ChannelStore.getChannel(message.channel_id)))
         ? () => openRawCiphertextModal(armored)
         : undefined;
@@ -221,7 +223,7 @@ function MessageAccessory({ message }: { message: AccessoryMessage; }) {
         case "placeholder":
             return <Placeholder reason={display.reason} messageId={message.id} onViewRaw={viewRaw} />;
         case "decrypt":
-            return <Decrypted entry={entry} message={message} blur={opts.blurPlaintext} />;
+            return <Decrypted entry={entry} message={message} blur={opts.blurPlaintext} repeated={repeated} />;
         case "key":
             return parsed.kind === "keyreq" || parsed.kind === "keyresp"
                 ? <KeyMessageCard message={message} kind={parsed.kind} armoredKey={parsed.armoredKey} />

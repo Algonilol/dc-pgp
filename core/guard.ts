@@ -4,13 +4,32 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { isEncryptedContent, isProtocolContent } from "./format";
+import { buildKeyMessageContent, buildKeyUpdateContent, buildMessageContent, parseContent } from "./format";
 
 export const SILENT_PREFIX = "@silent ";
 
 /** Discord strips a leading "@silent " after our hook, so content is compared without it. */
 export function stripSilent(content: string): string {
     return content.startsWith(SILENT_PREFIX) ? content.slice(SILENT_PREFIX.length) : content;
+}
+
+/**
+ * Content exactly as DcPgp builds it, with nothing written around it. The brake lets such content out
+ * without our hook (key messages, resends), so text typed around a pasted block must not pass with it.
+ */
+export function isExactProtocolContent(content: string, messagesOnly = false): boolean {
+    const text = stripSilent(content);
+    const parsed = parseContent(text);
+    switch (parsed.kind) {
+        case "message":
+            return text === buildMessageContent(parsed.armored);
+        case "keyreq":
+            return !messagesOnly && text === buildKeyMessageContent("keyreq", parsed.armoredKey);
+        case "keyresp":
+            return !messagesOnly && (text === buildKeyMessageContent("keyresp", parsed.armoredKey) || text === buildKeyUpdateContent(parsed.armoredKey));
+        default:
+            return false;
+    }
 }
 
 export type Verdict =
@@ -41,7 +60,7 @@ export function checkOutgoing(c: OutgoingCheck): Verdict {
     if (c.hasPoll)
         return { ok: false, reason: "poll", message: "Polls are not encrypted and are blocked in encrypted chats." };
     if (!c.content.trim()) return OK;
-    if (c.expected !== undefined || isProtocolContent(c.content)) return OK;
+    if (c.expected !== undefined || isExactProtocolContent(c.content)) return OK;
     if (c.fromComposer && !c.seenByHook)
         return { ok: false, reason: "hook-missing", message: "The send protection did not run (probably after a Discord update). The message was NOT sent. Please update Vencord." };
     return { ok: false, reason: "plaintext", message: "This chat is encrypted, but the message is not. It was NOT sent." };
@@ -62,7 +81,7 @@ export function checkEdit(c: EditCheck): Verdict {
     if (!c.mustEncrypt || c.allowedPlain) return OK;
     if (!c.content.trim()) return OK;
     if (c.originalContent !== undefined && c.content === c.originalContent) return OK;
-    if (c.expected !== undefined || isEncryptedContent(c.content)) return OK;
+    if (c.expected !== undefined || isExactProtocolContent(c.content, true)) return OK;
     return { ok: false, reason: "plaintext", message: "In encrypted chats, edits must be encrypted. The change was NOT saved." };
 }
 

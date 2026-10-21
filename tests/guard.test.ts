@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildKeyMessageContent, buildMessageContent } from "../core/format";
+import { buildKeyMessageContent, buildKeyUpdateContent, buildMessageContent } from "../core/format";
 import { checkEdit, checkOutgoing, filterDraftState, type OutgoingCheck, stripSilent } from "../core/guard";
 
 const ARMOR = "-----BEGIN PGP MESSAGE-----\n\nwV4DAAAAAAAAAAASAQdA\n-----END PGP MESSAGE-----";
@@ -55,6 +55,20 @@ describe("Emergency brake when sending", () => {
         assert.equal(reason({ content: "", hasPoll: true }), "poll");
     });
 
+    it("text around a pasted block does not pass as encrypted", () => {
+        assert.equal(reason({ content: "look at this: " + ENC }), "plaintext");
+        assert.equal(reason({ content: ENC + "\nand here is my secret answer" }), "plaintext");
+        assert.equal(reason({ content: ENC + "\nsecret", seenByHook: false }), "hook-missing");
+        assert.equal(reason({ content: buildKeyMessageContent("keyresp", KEY) + "\nsecret" }), "plaintext");
+    });
+
+    it("key messages pass exactly as DcPgp builds them", () => {
+        assert.equal(reason({ content: buildKeyMessageContent("keyreq", KEY) }), "ok");
+        assert.equal(reason({ content: buildKeyMessageContent("keyresp", KEY) }), "ok");
+        assert.equal(reason({ content: buildKeyUpdateContent(KEY) }), "ok");
+        assert.equal(reason({ content: buildKeyMessageContent("keyreq", KEY).replace("ignore", "read") }), "plaintext");
+    });
+
     it("an explicitly allowed plaintext message passes", () => {
         assert.equal(reason({ content: "secret", allowedPlain: true }), "ok");
     });
@@ -74,6 +88,7 @@ describe("Emergency brake when editing", () => {
     it("blocks plaintext edits of encrypted messages", () => {
         assert.equal(edit({ content: "new plaintext", originalContent: ENC }), "plaintext");
         assert.equal(edit({ content: buildKeyMessageContent("keyresp", KEY) }), "plaintext", "edits must be message blocks");
+        assert.equal(edit({ content: ENC + "\nsecret", originalContent: ENC }), "plaintext", "nothing around the block");
     });
 
     it("lets encrypted and unchanged edits through", () => {

@@ -124,11 +124,13 @@ describe("Lock menu", () => {
         assert.equal(model({ ...input, encrypted: true }).icon, "warning");
     });
 
-    it("group/server: readers and the number without a key", () => {
+    it("group/server: readers and who has no key", () => {
         const m = model({ kind: "guild", partner: undefined, readers: [{ name: "A", verified: true }, { name: "B", verified: false }], missing: [{ name: "C", reason: "no-key" }] });
         assert.equal(entry(m.entries, "encrypt-all").disabled, false);
         assert.equal(entry(m.entries, "readers").label, "Readable by: A ✓, B");
-        assert.equal(entry(m.entries, "missing").label, "Without a key: 1");
+        assert.equal(entry(m.entries, "missing").label, "Without a key: C");
+        const many = model({ kind: "group", partner: undefined, missing: "CDEFGHI".split("").map(name => ({ name, reason: "no-key" as const })) });
+        assert.equal(entry(many.entries, "missing").label, "Without a key: C, D, E, F, G and 2 more");
         assert.equal(entry(model({ kind: "group", partner: undefined }).entries, "encrypt-all").disabled, true);
     });
 

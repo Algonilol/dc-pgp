@@ -40,14 +40,16 @@ A receiver rejects armored messages over 64 KiB, more than 100 encrypted session
 | Check | Result if it fails |
 |---|---|
 | Signature valid and made by the stored key of the Discord author (own key for own messages) | error, or a warning if no key of the author is stored |
+| If a replaced key of the author signed it: Discord's timestamp is at most 10 minutes after the user accepted the new key | error: possibly forged with the old key |
 | `s` equals the Discord author | error: the block was re-posted by another account |
 | `c` equals the channel | warning: copied or forwarded |
 | Own id in `r` (unless sender) | warning: probably forwarded |
 | `t` within 10 minutes of Discord's timestamp | warning: old or replayed |
+| No earlier message (lower snowflake id) shown since unlocking carries the same block | warning: replayed or re-posted copy |
 
 A signature made after the stored copy of the author's key expired cannot be checked. It is reported as such – an error, not "forged" – and checked again once an updated copy of the key arrives.
 
-Trust levels: **verified** (signature fine and the contact's safety number was compared), **unverified**, **failed** (any error).
+Trust levels: **verified** (signature fine, the contact's safety number was compared, and no warning), **unverified**, **failed** (any error).
 
 ## Key exchange
 

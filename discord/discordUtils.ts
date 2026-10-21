@@ -4,16 +4,34 @@
  */
 
 import type { Channel, User } from "@vencord/discord-types";
-import { findByPropsLazy } from "@webpack";
-import { ChannelActionCreators, ChannelStore, FluxDispatcher, GuildMemberStore, GuildRoleStore, UserStore } from "@webpack/common";
+import { findByCodeLazy, findByPropsLazy } from "@webpack";
+import { ChannelActionCreators, ChannelStore, FluxDispatcher, GuildMemberStore, GuildRoleStore, PermissionsBits, UserStore } from "@webpack/common";
 
 import type { ChannelPrefs } from "../core/model";
 import { MAX_READERS, planRecipients, type RecipientCandidate, type RecipientPlan } from "../core/send";
-import { contactOf, myId, S } from "./state";
+import { contactOf, logger, myId, S } from "./state";
 
 const PremiumUtils = findByPropsLazy("canUseIncreasedMessageLength");
+/** Discord's own permission calculation, for any member: ({ user, context }) => permission bits. */
+const computePermissions: (o: { user: string; context: Channel; }) => unknown = findByCodeLazy("\"string\"==typeof", ".computeLurkerPermissionsAllowList()", "isViewingRoles");
 
-export function userName(user: Pick<User, "globalName" | "username"> | null | undefined, fallback = "Unbekannt"): string {
+let permissionsUnavailable = false;
+
+/** Whether a member can open a server channel. If Discord's calculation is gone (after an update), everyone counts, as before. */
+function canSeeChannel(userId: string, channel: Channel): boolean {
+    if (permissionsUnavailable) return true;
+    try {
+        const permissions = computePermissions({ user: userId, context: channel });
+        if (typeof permissions !== "bigint") throw new Error("Unexpected permission value: " + typeof permissions);
+        return (permissions & PermissionsBits.VIEW_CHANNEL) === PermissionsBits.VIEW_CHANNEL;
+    } catch (e) {
+        permissionsUnavailable = true;
+        logger.warn("Channel permissions cannot be checked; server messages are encrypted for every contact on the server", e);
+        return true;
+    }
+}
+
+export function userName(user: Pick<User, "globalName" | "username"> | null | undefined, fallback = "Unknown"): string {
     return user?.globalName || user?.username || fallback;
 }
 
@@ -97,11 +115,12 @@ export function planForChannel(channel: Channel | null | undefined): ChannelPlan
             candidates = target.userIds.map(id => candidate(id, guildId));
         } else if (target.kind === "role") {
             candidates = Object.keys(S.session.data.contacts)
-                .filter(id => GuildMemberStore.getMember(guildId, id)?.roles?.includes(target.roleId))
+                .filter(id => GuildMemberStore.getMember(guildId, id)?.roles?.includes(target.roleId) && canSeeChannel(id, channel))
                 .map(id => candidate(id, guildId));
         } else {
+            // Only contacts who can open this channel: a private channel is not encrypted for the whole server.
             candidates = Object.keys(S.session.data.contacts)
-                .filter(id => GuildMemberStore.isMember(guildId, id))
+                .filter(id => GuildMemberStore.isMember(guildId, id) && canSeeChannel(id, channel))
                 .map(id => candidate(id, guildId));
         }
     }
@@ -114,9 +133,9 @@ export function planForChannel(channel: Channel | null | undefined): ChannelPlan
 
 export function roleName(guildId: string, roleId: string): string {
     try {
-        return GuildRoleStore.getRole(guildId, roleId)?.name ?? "Rolle";
+        return GuildRoleStore.getRole(guildId, roleId)?.name ?? "Role";
     } catch {
-        return "Rolle";
+        return "Role";
     }
 }
 

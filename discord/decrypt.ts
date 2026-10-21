@@ -11,7 +11,7 @@ import { type EchoResult, effectiveAutoDecrypt, ownEchoProblems, ownEchoVerdict 
 import { parseContent, type ParsedContent, snowflakeToMs } from "../core/format";
 import { setChannelAutoDecrypt } from "../core/menus";
 import { keyHasKeyId, NotForUsError } from "../core/pgp";
-import { type DecryptedView, decryptForDisplay, type ReceiveKeys } from "../core/receive";
+import { type DecryptedView, decryptForDisplay, noteCopy, type ReceiveKeys } from "../core/receive";
 import { settings } from "../settings";
 import { confirmDialog, toastError } from "../ui/dialogs";
 import { nameOf } from "./discordUtils";
@@ -34,6 +34,8 @@ export interface MessageLike {
     author?: { id: string; };
     editedTimestamp?: unknown;
     edited_timestamp?: unknown;
+    /** "SENDING" / "SEND_FAILED" for the local copy of a message that is still being sent. */
+    state?: string;
 }
 
 interface CacheItem {
@@ -48,6 +50,8 @@ const CONCURRENCY = 2;
 const LOCKED: DecryptEntry = { status: "locked" };
 
 const cache = new Map<string, CacheItem>();
+/** Block hash → the earliest message shown with it; see noteCopy. */
+const firstCopies = new Map<string, string>();
 const subscribers = new Map<string, Set<() => void>>();
 const queue: Array<() => Promise<void>> = [];
 let running = 0;
@@ -109,7 +113,7 @@ async function receiveKeysFor(authorId: string, channelId: string): Promise<Rece
         name: contact.name,
         verified: contact.verified,
         current: { fpr: contact.fpr, key: await parsedKey(contact.publicKey) },
-        history: await Promise.all(contact.history.map(async h => ({ fpr: h.fpr, key: await parsedKey(h.publicKey) })))
+        history: await Promise.all(contact.history.map(async h => ({ fpr: h.fpr, key: await parsedKey(h.publicKey), replacedAt: h.replacedAt })))
     } : null;
 
     const contactKeys = await Promise.all(Object.values(session.data.contacts).map(async c => ({ c, key: await parsedKey(c.publicKey).catch(() => null) })));
@@ -219,6 +223,21 @@ export function useDecryption(message: MessageLike, armored: string | null): Dec
         return unsubscribe;
     }, [key]);
     return entry;
+}
+
+/**
+ * Whether an earlier message already carried this block (replayed or re-posted). The local copy of a
+ * message that is still being sent is left out: it carries the same block as the server's copy.
+ */
+export function isRepeatedBlock(message: MessageLike, armored: string): boolean {
+    if (message.state === "SENDING" || message.state === "SEND_FAILED") return false;
+    const check = noteCopy(firstCopies, fnv1a(armored), message.id);
+    // The message noted first is the later copy after all: show it again, with the warning. Not during this render.
+    if (check.demoted) {
+        const key = entryKey(check.demoted, armored);
+        setTimeout(() => notify(key), 0);
+    }
+    return check.repeated;
 }
 
 export function revealMessage(messageId: string) {
@@ -365,6 +384,7 @@ function onStateChange() {
 
 function clearPlaintext() {
     cache.clear();
+    firstCopies.clear();
     queue.length = 0;
     contactsSignature = "";
     notifyAll();

@@ -147,7 +147,7 @@ export interface ReceiveContext {
     discordTimeMs: number;
 }
 
-const MAX_CLOCK_SKEW_MS = 10 * 60 * 1000;
+export const MAX_CLOCK_SKEW_MS = 10 * 60 * 1000;
 
 /** Compares the signed metadata with what Discord says about the message. */
 export function checkInner(parsed: ParsedInner, ctx: ReceiveContext): Finding[] {
