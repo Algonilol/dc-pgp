@@ -13,6 +13,22 @@ Discord already encrypts voice and video calls end-to-end – but not your text 
 
 ![How DcPgp works: your PC encrypts, Discord only stores ciphertext, your contact's PC decrypts and checks the message](docs/how-it-works.svg)
 
+## Contents
+
+- [Features](#features)
+- [What it does not protect](#what-it-does-not-protect)
+- [Installation (Windows)](#installation-windows)
+- [Getting started](#getting-started)
+- [Settings](#settings)
+- [Security notes](#security-notes)
+- [Known limitations](#known-limitations)
+- [Development](#development)
+- [Feedback and contributing](#feedback-and-contributing)
+- [Disclaimer](#disclaimer)
+- [License](#license)
+
+More details: [PROTOCOL.md](PROTOCOL.md) (wire format, key lifetime, vault) · [SECURITY.md](SECURITY.md) (threat model, reporting vulnerabilities) · [CONTRIBUTING.md](CONTRIBUTING.md)
+
 ## Features
 
 - **End-to-end encryption and signatures** with OpenPGP (Curve25519 keys, AES-256), compatible with GnuPG and Kleopatra.
