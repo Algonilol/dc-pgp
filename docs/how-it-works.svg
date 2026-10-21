@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 508" width="760" height="508" role="img" aria-labelledby="title desc" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="12.5">
   <title id="title">Discord only sees ciphertext – encryption happens on your PCs</title>
-  <desc id="desc">You type a message, Discord-PGP encrypts it on your PC, Discord stores only ciphertext, and Discord-PGP on your contact's PC decrypts and checks it. Keys are exchanged once via DM.</desc>
+  <desc id="desc">You type a message, DcPgp encrypts it on your PC, Discord stores only ciphertext, and DcPgp on your contact's PC decrypts and checks it. Keys are exchanged once via DM.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M0 0L10 5L0 10z" fill="#8c959f"/>
@@ -37,9 +37,9 @@
   <text x="144" y="136" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2328">1. You type</text>
   <text x="144" y="152" text-anchor="middle" fill="#1f2328">plaintext in the chat box</text>
 
-  <!-- 2. Discord-PGP encrypts -->
+  <!-- 2. DcPgp encrypts -->
   <rect x="40" y="216" width="208" height="104" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="2"/>
-  <text x="144" y="240" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2328">2. Discord-PGP encrypts</text>
+  <text x="144" y="240" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2328">2. DcPgp encrypts</text>
   <text x="144" y="256" text-anchor="middle" fill="#1f2328">signed, with metadata</text>
   <text x="144" y="272" text-anchor="middle" fill="#1f2328">to your contact and you</text>
   <text x="144" y="288" text-anchor="middle" fill="#1f2328">nothing leaves unencrypted</text>
@@ -52,9 +52,9 @@
   <text x="376" y="288" text-anchor="middle" fill="#1f2328">sees: who, when,</text>
   <text x="376" y="304" text-anchor="middle" fill="#1f2328">and rough length</text>
 
-  <!-- 4. Discord-PGP decrypts -->
+  <!-- 4. DcPgp decrypts -->
   <rect x="504" y="216" width="208" height="104" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="2"/>
-  <text x="608" y="240" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2328">4. Discord-PGP decrypts</text>
+  <text x="608" y="240" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2328">4. DcPgp decrypts</text>
   <text x="608" y="256" text-anchor="middle" fill="#1f2328">checks signature, sender,</text>
   <text x="608" y="272" text-anchor="middle" fill="#1f2328">chat and time</text>
   <text x="608" y="288" text-anchor="middle" fill="#1f2328">warns on mismatches</text>
@@ -77,5 +77,5 @@
   <text x="608" y="392" text-anchor="middle" fill="#1f2328">their private key,</text>
   <text x="608" y="408" text-anchor="middle" fill="#1f2328">your public key</text>
 
-  <text x="24" y="484" font-size="11.5" fill="#59636e">Blue: where Discord-PGP works. Grey area: Discord, which only sees ciphertext and metadata.</text>
+  <text x="24" y="484" font-size="11.5" fill="#59636e">Blue: where DcPgp works. Grey area: Discord, which only sees ciphertext and metadata.</text>
 </svg>

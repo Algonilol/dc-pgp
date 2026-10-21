@@ -55,8 +55,8 @@ const sentAt = (id: string) => /^\d{1,25}$/.test(id) ? snowflakeToMs(id) : Date.
 
 const PLACEHOLDER_TEXT: Record<PlaceholderReason, string> = {
     loading: "Encrypted message",
-    nosetup: "Encrypted message – Discord-PGP is not set up.",
-    locked: "Encrypted message – Discord-PGP is locked.",
+    nosetup: "Encrypted message – DcPgp is not set up.",
+    locked: "Encrypted message – DcPgp is locked.",
     manual: "Encrypted message"
 };
 

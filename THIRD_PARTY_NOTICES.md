@@ -1,6 +1,6 @@
 # Third-party notices
 
-Discord-PGP is licensed under GPL-3.0-or-later. It is built into [Vencord](https://github.com/Vendicated/Vencord) (GPL-3.0-or-later) and bundles the following components.
+DcPgp is licensed under GPL-3.0-or-later. It is built into [Vencord](https://github.com/Vendicated/Vencord) (GPL-3.0-or-later) and bundles the following components.
 
 | Component | Version | License | Used for |
 |---|---|---|---|

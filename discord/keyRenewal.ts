@@ -20,7 +20,7 @@ async function renewOwnKey(session: Session): Promise<boolean> {
     session.ownPublicList[0] = { fpr: session.data.self.fpr, key: extended.toPublic() };
     applyOwnKeyRenewal(session.data, { publicKey: armorKey(minimal), privateKey: armorKey(extended) }, now.getTime());
     const until = await keyExpiry(extended);
-    toastInfo(`Your Discord-PGP key was extended${until != null ? ` until ${isoDay(until)}` : ""}. Your contacts get the update the next time you write to them.`);
+    toastInfo(`Your DcPgp key was extended${until != null ? ` until ${isoDay(until)}` : ""}. Your contacts get the update the next time you write to them.`);
     return true;
 }
 

@@ -74,7 +74,7 @@ async function takeKeyUpdate(session: Session, authorId: string, name: string, i
 export async function requestKey(userId: string): Promise<void> {
     const session = S.session;
     const me = myId();
-    if (!session || !me) return toastError("Discord-PGP is locked.");
+    if (!session || !me) return toastError("DcPgp is locked.");
     if (userId === me) return;
     const name = nameOf(userId);
     if (session.data.blocked[userId]) return toastError(`${name} is blocked. Unblock them first.`);
@@ -204,7 +204,7 @@ async function processKeyMessage(message: any, kind: KeyMessageKind, armoredKey:
             // No forced modal: the answer may arrive while the user is busy elsewhere.
             toastSuccess(crossed
                 ? `Your requests crossed: ${name}'s key is stored and yours is on its way. Verify? Use the lock menu in the chat.`
-                : `Received ${name}'s key – verify it? Use the lock menu in the chat or right-click → Discord-PGP.`);
+                : `Received ${name}'s key – verify it? Use the lock menu in the chat or right-click → DcPgp.`);
             return;
         }
         case "ask-resend": {
@@ -313,7 +313,7 @@ export function actOnKeyMessage(message: any, choice: Exclude<KeyMessageTrigger,
     const parsed = parseContent(message?.content);
     if (parsed.kind !== "keyreq" && parsed.kind !== "keyresp") return Promise.resolve();
     if (!S.session) {
-        toastError("Discord-PGP is locked.");
+        toastError("DcPgp is locked.");
         return Promise.resolve();
     }
     const { kind, armoredKey } = parsed;
@@ -352,7 +352,7 @@ export function checkOfferedKey(armoredKey: string): Promise<KeyCheck> {
 
 export async function setChatEncrypted(channelId: string, on: boolean): Promise<void> {
     const session = S.session;
-    if (!session) return toastError("Discord-PGP is locked.");
+    if (!session) return toastError("DcPgp is locked.");
     setChannelEncryption(session.data, channelId, on);
     await saveVault();
     toastInfo(on ? "This chat is encrypted from now on." : "Encryption for this chat is switched off.");
@@ -386,7 +386,7 @@ export async function unblockContact(userId: string): Promise<void> {
  */
 export async function removeContactFlow(userId: string, channelId: string | null): Promise<void> {
     const session = S.session;
-    if (!session) return toastError("Discord-PGP is locked.");
+    if (!session) return toastError("DcPgp is locked.");
     const name = nameOf(userId);
     if (!await confirmRemoveContact(name) || S.session !== session) return;
     forgetContact(session.data, userId, channelId);

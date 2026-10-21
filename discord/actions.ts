@@ -37,7 +37,7 @@ export class DeviceKeyError extends Error {
 }
 
 function requireSession(): Session {
-    if (!S.session) throw new Error("Discord-PGP is locked.");
+    if (!S.session) throw new Error("DcPgp is locked.");
     return S.session;
 }
 
@@ -122,7 +122,7 @@ export async function prepareImportedKey(content: string | Uint8Array, passphras
 export async function saveKeyFile(key: PrivateKey, password: string, generated?: string | null): Promise<string | null> {
     await assertStrong(password, generated);
     const armored = await exportProtectedPrivateKey(key, password);
-    return Native.saveTextFile(`discord-pgp-key-${fingerprintOf(key).slice(-8)}.asc`, armored, "asc");
+    return Native.saveTextFile(`dcpgp-key-${fingerprintOf(key).slice(-8)}.asc`, armored, "asc");
 }
 
 export function exportOwnKeyFile(password: string, generated?: string | null): Promise<string | null> {
@@ -140,7 +140,7 @@ export interface SetupInput {
 export async function setupVault(i: SetupInput): Promise<void> {
     const uid = S.userId;
     if (!uid) throw new Error("No Discord account loaded.");
-    if (S.file) throw new Error("Discord-PGP is already set up for this account.");
+    if (S.file) throw new Error("DcPgp is already set up for this account.");
     const { key, report, source } = i.prepared;
     if (report.errors.length) throw new Error(report.errors.join(" "));
     const needs = setupNeeds(source, i.mode);
@@ -201,7 +201,7 @@ export function lockVault(reason?: string) {
     forgetSession();
     S.phase = S.file ? "locked" : "nosetup";
     S.emit();
-    if (reason) toastInfo(`Discord-PGP locked (${reason}).`);
+    if (reason) toastInfo(`DcPgp locked (${reason}).`);
 }
 
 export async function changePassword(newPassword: string, generated?: string | null): Promise<void> {
@@ -231,7 +231,7 @@ export async function revealPrivateKey(password: string): Promise<string> {
         mixer = nativeMixer;
     }
     await openWithPassword(file, password, argon2, mixer);
-    if (S.session !== session) throw new Error("Discord-PGP was locked in the meantime.");
+    if (S.session !== session) throw new Error("DcPgp was locked in the meantime.");
     return armorKey(session.privateKey);
 }
 
@@ -263,7 +263,7 @@ export async function changeSecurityMode(mode: VaultMode, o: ModeOptions = {}): 
         } finally {
             raw.fill(0);
         }
-        if (S.session !== session) throw new Error("Discord-PGP was locked in the meantime.");
+        if (S.session !== session) throw new Error("DcPgp was locked in the meantime.");
         session.data = withPrivateKey(session.data, armorKey(session.privateKey));
         session.file = fileWithHeader(session.file, headerForMode(session.file, "stored", slot));
     }
@@ -276,7 +276,7 @@ export async function exportVaultBackup(password: string, generated?: string | n
     const uid = S.userId!;
     await assertStrong(password, generated);
     const text = await createBackup({ owner: uid, mode: session.file.mode, data: session.data, password, params: await calibrateArgon2(argon2), argon2 });
-    return Native.saveTextFile(`discord-pgp-vault-${new Date().toISOString().slice(0, 10)}.${BACKUP_EXTENSION}`, text, BACKUP_EXTENSION);
+    return Native.saveTextFile(`dcpgp-vault-${new Date().toISOString().slice(0, 10)}.${BACKUP_EXTENSION}`, text, BACKUP_EXTENSION);
 }
 
 /**

@@ -160,10 +160,10 @@ export function clearClipboardIfEquals(_: IpcMainInvokeEvent, fullText: string):
 export async function saveTextFile(_: IpcMainInvokeEvent, defaultName: string, content: string, extension: "asc" | "dcpgp" = "asc"): Promise<string | null> {
     const safeName = String(defaultName).replace(/[\\/:*?"<>|]/g, "_").slice(0, 120) || "dcpgp.asc";
     const filter = extension === "dcpgp"
-        ? { name: "Discord-PGP backup", extensions: ["dcpgp"] }
+        ? { name: "DcPgp backup", extensions: ["dcpgp"] }
         : { name: "OpenPGP", extensions: ["asc"] };
     const result = await dialog.showSaveDialog({
-        title: "Discord-PGP – Save file",
+        title: "DcPgp – Save file",
         defaultPath: join(app.getPath("documents"), safeName),
         filters: [filter, { name: "All files", extensions: ["*"] }]
     });

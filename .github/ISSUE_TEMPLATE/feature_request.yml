@@ -1,5 +1,5 @@
 name: Feature request
-description: An idea or a wish for Discord-PGP.
+description: An idea or a wish for DcPgp.
 labels: ["enhancement"]
 body:
   - type: markdown
@@ -16,7 +16,7 @@ body:
   - type: textarea
     id: idea
     attributes:
-      label: How could Discord-PGP help?
+      label: How could DcPgp help?
       description: Your idea, if you have one. If it touches security, say what it would reveal to Discord or to your contacts.
   - type: textarea
     id: more

@@ -30,7 +30,7 @@ let preSendInstalled = false;
 
 function safeToast(text: string) {
     try {
-        toastError("Discord-PGP: " + text);
+        toastError("DcPgp: " + text);
     } catch (e) {
         logger.error("Toast failed:", text, e);
     }
@@ -76,7 +76,7 @@ async function encryptOutgoing(channelId: string, msg: MessageObject, options: S
     const session = S.session;
     const me = myId();
     if (S.phase !== "unlocked" || !session || !me)
-        return cancel("This chat is encrypted, but Discord-PGP is locked. Message NOT sent.");
+        return cancel("This chat is encrypted, but DcPgp is locked. Message NOT sent.");
     if (options?.alsoForwardToChannelId)
         return cancel("\"Also send to channel\" does not work with encrypted messages. Message NOT sent.");
     if (props?.hasAttachments)
@@ -88,7 +88,7 @@ async function encryptOutgoing(channelId: string, msg: MessageObject, options: S
     if (!text.trim()) return;
 
     const plan = planForChannel(props?.channel ?? ChannelStore.getChannel(channelId));
-    if (plan.unsupported) return cancel("Discord-PGP cannot encrypt in this type of chat. Message NOT sent.");
+    if (plan.unsupported) return cancel("DcPgp cannot encrypt in this type of chat. Message NOT sent.");
     if (plan.kind === "dm" && plan.missing.length) return cancel(missingText(plan.missing[0]));
     if (!plan.readers.length) return cancel("Nobody in this chat has a stored key. Message NOT sent.");
 
@@ -109,7 +109,7 @@ async function encryptOutgoing(channelId: string, msg: MessageObject, options: S
         if (e instanceof TooLongError) return cancel("Message NOT sent: " + e.message);
         throw e;
     }
-    if (S.session !== session) return cancel("Discord-PGP was locked while encrypting. Message NOT sent.");
+    if (S.session !== session) return cancel("DcPgp was locked while encrypting. Message NOT sent.");
 
     const finalContent = (silent ? SILENT_PREFIX : "") + encrypted;
     msg.content = finalContent;

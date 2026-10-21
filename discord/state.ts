@@ -133,7 +133,7 @@ export async function loadForUser(userId: string) {
         logger.error("Vault unreadable, trying the previous version", e);
         const prev = await DataStore.get(vaultPrevKey(userId));
         S.file = prev ? validateVaultFile(prev) : null;
-        if (S.file) showToast({ text: "Discord-PGP: the vault was damaged, loaded the previous version.", variant: "critical" });
+        if (S.file) showToast({ text: "DcPgp: the vault was damaged, loaded the previous version.", variant: "critical" });
     }
     S.phase = S.file ? "locked" : "nosetup";
     S.emit();
@@ -166,7 +166,7 @@ export function saveVault(): Promise<void> {
         await storeGuardTags();
     }).catch(e => {
         logger.error("Saving the vault failed", e);
-        showToast({ text: "Discord-PGP: the vault could not be saved!", variant: "critical" });
+        showToast({ text: "DcPgp: the vault could not be saved!", variant: "critical" });
     });
     S.emit();
     return saveChain;
@@ -180,7 +180,7 @@ export function saveVault(): Promise<void> {
 export function rewriteVault(session: Session, update: () => void): Promise<void> {
     const run = saveChain.then(async () => {
         const uid = S.userId;
-        if (S.session !== session || !uid) throw new Error("Discord-PGP was locked in the meantime.");
+        if (S.session !== session || !uid) throw new Error("DcPgp was locked in the meantime.");
         update();
         pruneVaultData(session.data);
         const file = await sealVault(headerOf(session.file), session.dek, session.data);

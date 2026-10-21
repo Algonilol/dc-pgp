@@ -8,7 +8,7 @@ Helpful in a report: what an attacker needs (position, access), what they gain, 
 
 ## Threat model
 
-**Discord-PGP aims to protect the content of text messages against:**
+**DcPgp aims to protect the content of text messages against:**
 
 - Discord itself and anyone with access to Discord's servers, data or backups;
 - network observers;
@@ -18,7 +18,7 @@ Helpful in a report: what an attacker needs (position, access), what they gain, 
 
 **It does not protect against:**
 
-- malware or anyone controlling your Windows account while Discord-PGP is unlocked;
+- malware or anyone controlling your Windows account while DcPgp is unlocked;
 - a malicious Discord client update that bypasses the plugin;
 - metadata: who writes to whom, when, how often and roughly how much;
 - your contacts: they see the plaintext and can copy it;

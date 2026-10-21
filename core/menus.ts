@@ -88,19 +88,19 @@ export function encryptionBlocker(i: ChatMenuInput): string | null {
 
 export function chatButtonModel(i: ChatMenuInput): ChatButtonModel {
     if (i.phase === "loading")
-        return { icon: "unavailable", tooltip: "Discord-PGP is loading …", entries: [info("loading", "Discord-PGP is loading …")] };
+        return { icon: "unavailable", tooltip: "DcPgp is loading …", entries: [info("loading", "DcPgp is loading …")] };
     if (i.phase === "nosetup")
         return {
             icon: "unavailable",
-            tooltip: "Discord-PGP is not set up yet",
-            entries: [info("nosetup", "Discord-PGP is not set up yet."), { type: "action", id: "setup", label: "Set up Discord-PGP …" }]
+            tooltip: "DcPgp is not set up yet",
+            entries: [info("nosetup", "DcPgp is not set up yet."), { type: "action", id: "setup", label: "Set up DcPgp …" }]
         };
     if (i.kind === "unsupported")
-        return { icon: "unavailable", tooltip: "Discord-PGP: not available in this chat", entries: [info("unsupported", "Not available in this type of chat.")] };
+        return { icon: "unavailable", tooltip: "DcPgp: not available in this chat", entries: [info("unsupported", "Not available in this type of chat.")] };
     if (i.phase === "locked")
         return {
             icon: i.encrypted ? "on" : "unavailable",
-            tooltip: i.encrypted ? "Encrypted chat – Discord-PGP is locked" : "Discord-PGP is locked",
+            tooltip: i.encrypted ? "Encrypted chat – DcPgp is locked" : "DcPgp is locked",
             entries: [
                 info("locked-state", i.encrypted ? "This chat is encrypted." : "This chat is not encrypted."),
                 { type: "action", id: "unlock", label: "Unlock …" }

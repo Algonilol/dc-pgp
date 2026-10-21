@@ -118,11 +118,11 @@ export function keyCardModel(i: KeyCardInput): KeyCardModel {
     const what = i.kind === "keyreq" ? "Key request" : "Key";
     const name = i.authorName;
     if (i.myId != null && i.authorId === i.myId)
-        return { tone: "info", text: i.kind === "keyreq" ? "Your key request (Discord-PGP)" : "Your public key (Discord-PGP)", actions: [] };
+        return { tone: "info", text: i.kind === "keyreq" ? "Your key request (DcPgp)" : "Your public key (DcPgp)", actions: [] };
     if (i.phase === "nosetup")
-        return { tone: "info", text: `${what} from ${name} – set up Discord-PGP to chat encrypted.`, actions: [{ id: "setup", label: "Set up" }] };
+        return { tone: "info", text: `${what} from ${name} – set up DcPgp to chat encrypted.`, actions: [{ id: "setup", label: "Set up" }] };
     if (i.phase !== "unlocked" || !i.data || i.myId == null)
-        return { tone: "info", text: `${what} from ${name} – unlock Discord-PGP to answer.`, actions: i.phase === "locked" ? [{ id: "unlock", label: "Unlock" }] : [] };
+        return { tone: "info", text: `${what} from ${name} – unlock DcPgp to answer.`, actions: i.phase === "locked" ? [{ id: "unlock", label: "Unlock" }] : [] };
     if (!i.isDm) return { tone: "info", text: `${what} from ${name} – keys are only accepted in direct messages.`, actions: [] };
     if (!i.check) return { tone: "info", text: `${what} from ${name} – checking …`, actions: [] };
     if ("error" in i.check) return { tone: "danger", text: `Invalid key from ${name}: ${i.check.error}`, actions: [] };

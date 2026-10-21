@@ -228,7 +228,7 @@ export function revealMessage(messageId: string) {
 
 export async function setChatAutoDecrypt(channelId: string, on: boolean): Promise<void> {
     const session = S.session;
-    if (!session) return toastError("Discord-PGP is locked.");
+    if (!session) return toastError("DcPgp is locked.");
     setChannelAutoDecrypt(session.data, channelId, on, settings.store.autoDecrypt);
     await saveVault();
 }

@@ -348,7 +348,7 @@ export async function prepareOwnKey(key: PrivateKey, now = new Date()): Promise<
         const fresh = await inspectKey(extended, now);
         if (fresh.errors.length) return { key, report };
         const until = fresh.expires ? ` until ${fresh.expires.toISOString().slice(0, 10)}` : "";
-        return { key: extended, report: { ...fresh, warnings: [`The key had expired; Discord-PGP extended it${until}.`, ...fresh.warnings] } };
+        return { key: extended, report: { ...fresh, warnings: [`The key had expired; DcPgp extended it${until}.`, ...fresh.warnings] } };
     } catch {
         return { key, report };
     }

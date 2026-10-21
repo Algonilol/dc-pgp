@@ -6,7 +6,7 @@ Thanks for helping! Bug reports and ideas are welcome as [issues](../../issues/n
 
 Small, focused pull requests are the easiest to review. For larger changes, please open an issue first, so we can agree on the approach.
 
-Discord-PGP protects people's messages, so a few rules are strict:
+DcPgp protects people's messages, so a few rules are strict:
 
 - **Fail closed.** If something goes wrong, nothing is sent – never plaintext in an encrypted chat.
 - **No secrets in logs or messages.** Never log or display plaintext, keys, passwords or vault content, not even in error messages.

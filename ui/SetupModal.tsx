@@ -86,7 +86,7 @@ function SetupModal(props: RenderModalProps) {
             keyFileSaved: savedPath != null
         });
         props.onClose();
-        toastSuccess("Discord-PGP is set up. Now request someone's key via the lock menu in a chat or by right-clicking them.");
+        toastSuccess("DcPgp is set up. Now request someone's key via the lock menu in a chat or by right-clicking them.");
     });
 
     const afterMode = () => needs?.password ? setStep("password") : needs?.keyFile ? setStep("keyfile") : void finish();
@@ -102,7 +102,7 @@ function SetupModal(props: RenderModalProps) {
         case "source":
             body = (
                 <>
-                    <Paragraph>Discord-PGP encrypts your messages end-to-end. For that you need your own PGP key.</Paragraph>
+                    <Paragraph>DcPgp encrypts your messages end-to-end. For that you need your own PGP key.</Paragraph>
                     <Gap />
                     <Choice title="Generate a new key" text="Recommended if you don't have a key just for Discord yet (Curve25519, valid for 2 years)." selected={false} onClick={() => setStep("generate")} />
                     <Choice title="Import a key from Kleopatra" text="An exported file with your secret key (.asc/.gpg) and its passphrase." selected={false} onClick={() => setStep("import")} />
@@ -171,7 +171,7 @@ function SetupModal(props: RenderModalProps) {
                 <>
                     <Paragraph>
                         {mode === "stored"
-                            ? "This password unlocks Discord-PGP every time Discord starts. It cannot be reset – only recovered with your key file."
+                            ? "This password unlocks DcPgp every time Discord starts. It cannot be reset – only recovered with your key file."
                             : "This password protects your key file. You need it every time Discord starts."}
                     </Paragraph>
                     <Gap />
@@ -200,7 +200,7 @@ function SetupModal(props: RenderModalProps) {
     }
 
     return (
-        <Modal {...props} title="Set up Discord-PGP" actions={actions}>
+        <Modal {...props} title="Set up DcPgp" actions={actions}>
             {body}
             {error && <ErrorText>{error}</ErrorText>}
         </Modal>

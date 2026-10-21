@@ -1,5 +1,5 @@
 /*
- * DcPgp – "Discord-PGP" entry in the user context menu (contact management).
+ * DcPgp – "DcPgp" entry in the user context menu (contact management).
  * Entries come from core/menus.ts (tested).
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -40,7 +40,7 @@ export const userContextPatch: NavContextMenuPatchCallback = (children, props: {
 
     children.push(
         <Menu.MenuSeparator key="dcpgp-separator" />,
-        <Menu.MenuItem key="dcpgp-user" id="dcpgp-user" label="Discord-PGP">
+        <Menu.MenuItem key="dcpgp-user" id="dcpgp-user" label="DcPgp">
             {entries.map(e => (
                 <Menu.MenuItem key={e.id} id={`dcpgp-user-${e.id}`} label={e.label} color={e.danger ? "danger" : undefined} action={() => run(e.id, user.id)} />
             ))}

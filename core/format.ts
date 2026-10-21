@@ -40,13 +40,13 @@ export function buildMessageContent(armored: string): string {
 export function buildKeyMessageContent(kind: KeyMessageKind, armoredPublicKey: string): string {
     const hint = kind === "keyreq" ? KEYREQ_HINT : KEYRESP_HINT;
     const text = kind === "keyreq"
-        ? "I'd like to chat with you end-to-end encrypted (Discord-PGP mod). Without the mod, you can ignore this message."
+        ? "I'd like to chat with you end-to-end encrypted (DcPgp mod). Without the mod, you can ignore this message."
         : "I accepted your key request. From now on we can chat encrypted.";
     return `${hint}\n${text}\n${FENCE}\n${armoredPublicKey.trim()}\n${FENCE}`;
 }
 
 export function buildKeyUpdateContent(armoredPublicKey: string): string {
-    return `${KEYUPD_HINT}\nMy Discord-PGP key was extended. Discord-PGP takes the update over automatically.\n${FENCE}\n${armoredPublicKey.trim()}\n${FENCE}`;
+    return `${KEYUPD_HINT}\nMy DcPgp key was extended. DcPgp takes the update over automatically.\n${FENCE}\n${armoredPublicKey.trim()}\n${FENCE}`;
 }
 
 /** Classifies a Discord message content without trusting any of it. */

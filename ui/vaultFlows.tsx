@@ -34,7 +34,7 @@ export function openChangePasswordModal(title = "Change password", description?:
 export function openKeyFileExport(after?: () => Promise<void>) {
     openPasswordPrompt({
         title: "Save key file",
-        description: "The file contains your private key, protected with this password. You can import it into Kleopatra or unlock Discord-PGP with it. Keep it somewhere safe (e.g. a USB stick).",
+        description: "The file contains your private key, protected with this password. You can import it into Kleopatra or unlock DcPgp with it. Keep it somewhere safe (e.g. a USB stick).",
         confirmText: "Save …",
         kind: "new",
         async onSubmit(password, generated) {
@@ -48,7 +48,7 @@ export function openKeyFileExport(after?: () => Promise<void>) {
 
 export async function openModeSwitch() {
     const session = S.session;
-    if (!session) return toastError("Discord-PGP is locked.");
+    if (!session) return toastError("DcPgp is locked.");
 
     if (session.file.mode === "stored") {
         const choice = await choose(

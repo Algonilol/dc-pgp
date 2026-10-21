@@ -1,4 +1,4 @@
-# Discord-PGP (dcpgp/1)
+# DcPgp (dcpgp/1)
 
 [![Tests](https://github.com/Algonilol/dc-pgp/actions/workflows/test.yml/badge.svg)](https://github.com/Algonilol/dc-pgp/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/Algonilol/dc-pgp)](https://github.com/Algonilol/dc-pgp/releases/latest)
@@ -6,19 +6,19 @@
 
 End-to-end encrypted direct messages for Discord, as a [Vencord](https://vencord.dev) userplugin.
 
-Discord already encrypts voice and video calls end-to-end – but not your text messages. Discord-PGP closes that gap: messages are signed and encrypted with OpenPGP on your PC before they reach Discord, so Discord only ever stores ciphertext. Your contact's plugin decrypts it and shows the plaintext in place of the PGP block, with a lock icon that tells you whether the sender is verified.
+Discord already encrypts voice and video calls end-to-end – but not your text messages. DcPgp closes that gap: messages are signed and encrypted with OpenPGP on your PC before they reach Discord, so Discord only ever stores ciphertext. Your contact's plugin decrypts it and shows the plaintext in place of the PGP block, with a lock icon that tells you whether the sender is verified.
 
 > [!WARNING]
 > **Experimental and not independently audited.** Client mods like Vencord are against Discord's Terms of Service. Read [what it does not protect](#what-it-does-not-protect) before you rely on it. Use at your own risk – see the [disclaimer](#disclaimer).
 
-![How Discord-PGP works: your PC encrypts, Discord only stores ciphertext, your contact's PC decrypts and checks the message](docs/how-it-works.svg)
+![How DcPgp works: your PC encrypts, Discord only stores ciphertext, your contact's PC decrypts and checks the message](docs/how-it-works.svg)
 
 ## Features
 
 - **End-to-end encryption and signatures** with OpenPGP (Curve25519 keys, AES-256), compatible with GnuPG and Kleopatra.
 - **Key exchange inside Discord**: a key request is an ordinary message; your contact accepts it with one click on the card under it. If you both send a request at the same time, the exchange completes on its own.
 - **Verification with safety numbers**: 60 digits you compare once on a call or in person. Key changes are never accepted silently.
-- **Keys that don't run out**: a year before your key expires, Discord-PGP extends it – same key, same safety number. Your contacts receive the update automatically.
+- **Keys that don't run out**: a year before your key expires, DcPgp extends it – same key, same safety number. Your contacts receive the update automatically.
 - **Made for 1:1 DMs**; group DMs and server channels work too: each message is readable for everyone in the chat whose key you have.
 - **Signed metadata inside the encryption** (sender, chat, recipients, time) exposes re-posted, forwarded or replayed messages.
 - **Fail-closed send protection**: in an encrypted chat nothing leaves unencrypted. The plugin is the first pre-send hook, an emergency brake guards Discord's own send and edit functions, drafts of encrypted chats are never written to disk, and a check verifies that your own messages arrive at Discord encrypted.
@@ -27,7 +27,7 @@ Discord already encrypts voice and video calls end-to-end – but not your text 
 - **Portable vault backup** to move to another PC.
 - Decrypted text is only rendered in the UI; it never enters Discord's message store.
 - **View Raw PGP**: while locked, see and copy the exact encrypted block of a DM message, e.g. to decrypt it in Kleopatra.
-- What Discord-PGP copies for you (ciphertext, your private key) is cleared from the clipboard after a set time.
+- What DcPgp copies for you (ciphertext, your private key) is cleared from the clipboard after a set time.
 - Optional blur for screen sharing, a per-chat "decrypt automatically" switch, and a mark on unencrypted messages in encrypted chats.
 
 ## What it does not protect
@@ -67,11 +67,11 @@ Restart Discord and enable **DcPgp** under *Settings → Vencord → Plugins*.
 
 ## Getting started
 
-1. **Set up** – click the lock icon next to the chat input → *Set up Discord-PGP*. Generate a new key (recommended) or import one from Kleopatra, choose a mode (*Stored* is recommended), set a password (*Generate* gives you five random words) and save the key file somewhere safe.
+1. **Set up** – click the lock icon next to the chat input → *Set up DcPgp*. Generate a new key (recommended) or import one from Kleopatra, choose a mode (*Stored* is recommended), set a password (*Generate* gives you five random words) and save the key file somewhere safe.
 2. **Exchange keys** – in a DM: lock menu → *Request ⟨name⟩'s key*. Your contact accepts with one click on the card under your request.
 3. **Verify** – lock menu → *Compare safety number*. Read the 60 digits to each other on a call or compare them in person. When they match, messages from this contact get a green lock.
 4. **Encrypt** – lock menu → *Encrypt everything in this chat*. A green dot on the lock confirms that your next message will be sent encrypted – and if that is not possible, it is not sent.
-5. **Lock** – lock menu → *Lock now*; Discord-PGP also locks itself after an hour without input and when Windows locks. Encrypted messages then show a placeholder until you unlock.
+5. **Lock** – lock menu → *Lock now*; DcPgp also locks itself after an hour without input and when Windows locks. Encrypted messages then show a placeholder until you unlock.
 
 Your vault actions (change password, save key file, show or remove the stored private key, vault backup) are on the plugin's settings page.
 
@@ -85,7 +85,7 @@ Your vault actions (change password, save key file, show or remove the stored pr
 | Lock when Windows is locked or goes to sleep | on | also on shutdown |
 | Mark unencrypted messages in encrypted chats | on | |
 | Blur plaintext until the mouse hovers over it | off | privacy screen for screen sharing |
-| Remove copied plaintext from the clipboard after this many seconds | 60 | 0 = never; applies to Discord-PGP's copy buttons, not to text you copy with Ctrl+C |
+| Remove copied plaintext from the clipboard after this many seconds | 60 | 0 = never; applies to DcPgp's copy buttons, not to text you copy with Ctrl+C |
 | When locked, show the raw dcpgp/1 block instead of only a placeholder | off | |
 
 ## Security notes
@@ -95,7 +95,7 @@ Your vault actions (change password, save key file, show or remove the stored pr
 - **The vault is bound to this PC.** The vault password alone does not open it elsewhere, because a device key protected by Windows (DPAPI) is mixed in. To move to another PC, use a vault backup or your key file.
 - **A vault backup is protected by its password only** (Argon2id, no device key). Choose a strong one.
 - **Showing your private key** asks for the vault password again. Anyone who sees it can read all your messages; to move your key, save the key file instead, which is password-protected.
-- **Key lifetime.** Generated keys are valid for two years. When less than a year is left, Discord-PGP extends your key the next time you unlock: new self-signatures on the same key, so fingerprint and safety numbers stay. A contact gets the extended key once, right after your next encrypted message in your DM, or when they ask for it. If a contact's key is about to expire, the lock menu offers *Request ⟨name⟩'s updated key*. If you use the same key in Kleopatra, save the key file again and import it there, so Kleopatra knows the new expiry.
+- **Key lifetime.** Generated keys are valid for two years. When less than a year is left, DcPgp extends your key the next time you unlock: new self-signatures on the same key, so fingerprint and safety numbers stay. A contact gets the extended key once, right after your next encrypted message in your DM, or when they ask for it. If a contact's key is about to expire, the lock menu offers *Request ⟨name⟩'s updated key*. If you use the same key in Kleopatra, save the key file again and import it there, so Kleopatra knows the new expiry.
 - **After Discord or Vencord updates** the plugin's hooks may stop working. It then refuses to send in encrypted chats and shows "send protection broken" instead of leaking plaintext.
 
 Details: [SECURITY.md](SECURITY.md) (threat model, reporting vulnerabilities) and [PROTOCOL.md](PROTOCOL.md) (dcpgp/1 wire format, key lifetime, vault format, safety numbers).
@@ -107,7 +107,7 @@ Details: [SECURITY.md](SECURITY.md) (threat model, reporting vulnerabilities) an
 - **Mentions** inside an encrypted message don't ping: Discord cannot see them. Reply previews and notifications show only the "Encrypted message" header.
 - **Message length**: about 800 characters of text per message without Nitro, about 2,270 with Nitro (plain text; umlauts and emoji take more). Longer messages are refused instead of being cut off.
 - **Group DMs and server channels** are less tested than 1:1 DMs; a message is encrypted to at most 50 readers. Contacts you only write to there receive your extended key only when they ask for it.
-- **Text you copy with Ctrl+C** stays in the clipboard; only Discord-PGP's own copy buttons clear it.
+- **Text you copy with Ctrl+C** stays in the clipboard; only DcPgp's own copy buttons clear it.
 - **Deleted data may linger on disk**: Discord's storage (IndexedDB) does not overwrite removed entries right away.
 - **Tested on Windows 11** with Discord Stable and PTB. macOS and Linux are untested; the device key uses the system's keychain there instead of DPAPI.
 - The interface is English only.
@@ -134,9 +134,9 @@ Found a bug or have an idea? Open an [issue](../../issues/new/choose) – the fo
 
 ## Disclaimer
 
-Discord-PGP is provided "as is", without warranty of any kind (see sections 15 and 16 of the [license](LICENSE)). You use it at your own risk. The author is not responsible for how, or for what purpose, anyone uses it, nor for any damage or loss that results from its use – including actions Discord takes against an account. Every user is responsible for complying with the laws that apply to them and with Discord's Terms of Service.
+DcPgp is provided "as is", without warranty of any kind (see sections 15 and 16 of the [license](LICENSE)). You use it at your own risk. The author is not responsible for how, or for what purpose, anyone uses it, nor for any damage or loss that results from its use – including actions Discord takes against an account. Every user is responsible for complying with the laws that apply to them and with Discord's Terms of Service.
 
-Discord-PGP is an independent project. It is not affiliated with, endorsed by or sponsored by Discord Inc. or the Vencord project.
+DcPgp is an independent project. It is not affiliated with, endorsed by or sponsored by Discord Inc. or the Vencord project.
 
 ## License
 

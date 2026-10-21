@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Discord-PGP does not work as it should.
+description: Something in DcPgp does not work as it should.
 labels: ["bug"]
 body:
   - type: markdown
@@ -27,12 +27,12 @@ body:
     id: messages
     attributes:
       label: Messages and errors
-      description: The exact text of Discord-PGP's messages. Lines with "DcPgp" from Discord's developer console help a lot – remove anything private first.
+      description: The exact text of DcPgp's messages. Lines with "DcPgp" from Discord's developer console help a lot – remove anything private first.
       render: text
   - type: input
     id: version
     attributes:
-      label: Discord-PGP version
+      label: DcPgp version
       description: The commit you built, e.g. the output of `git log -1 --format=%h` in the plugin folder.
     validations:
       required: true

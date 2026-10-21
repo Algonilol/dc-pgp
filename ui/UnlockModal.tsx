@@ -46,7 +46,7 @@ function UnlockModal(props: RenderModalProps) {
         try {
             const result = await unlockVault(useKeyFile ? { keyFile: keyFile!.content, passphrase } : { password });
             props.onClose();
-            toastSuccess("Discord-PGP unlocked.");
+            toastSuccess("DcPgp unlocked.");
             if (result.viaKeyFile && S.file?.mode === "stored")
                 openChangePasswordModal("Set a new password", "You unlocked with your key file. Set a new vault password for this PC now (or later in the plugin settings).");
         } catch (e) {
@@ -60,7 +60,7 @@ function UnlockModal(props: RenderModalProps) {
     return (
         <Modal
             {...props}
-            title="Unlock Discord-PGP"
+            title="Unlock DcPgp"
             actions={[
                 { text: "Continue without encryption", variant: "secondary", onClick: () => props.onClose() },
                 { text: "Unlock", variant: "primary", onClick: () => void submit(), loading: busy, disabled: !ready || busy }
@@ -70,7 +70,7 @@ function UnlockModal(props: RenderModalProps) {
                 <>
                     <Paragraph>
                         {isRam
-                            ? "\"RAM only\" mode: choose your key file (Kleopatra export or Discord-PGP key file) and enter its passphrase."
+                            ? "\"RAM only\" mode: choose your key file (Kleopatra export or DcPgp key file) and enter its passphrase."
                             : "Recovery: choose your key file and enter its passphrase."}
                     </Paragraph>
                     <Gap />

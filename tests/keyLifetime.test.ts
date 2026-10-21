@@ -124,7 +124,7 @@ describe("Key lifetime: extending keys", () => {
 
         const prepared = await prepareOwnKey(expired);
         assert.deepEqual(prepared.report.errors, []);
-        assert.match(prepared.report.warnings[0], /^The key had expired; Discord-PGP extended it until \d{4}-\d\d-\d\d\.$/);
+        assert.match(prepared.report.warnings[0], /^The key had expired; DcPgp extended it until \d{4}-\d\d-\d\d\.$/);
         assert.equal(fingerprintOf(prepared.key), fingerprintOf(expired));
 
         const { privateKey: revoked } = await openpgp.revokeKey({ key: await keyMadeAgo(DAY), format: "object" });
