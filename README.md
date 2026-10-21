@@ -67,7 +67,7 @@ Open a normal PowerShell window (**not as administrator**) and run:
 irm https://raw.githubusercontent.com/Algonilol/dc-pgp/main/install.ps1 | iex
 ```
 
-The [installer](install.ps1) checks Git and Node.js, downloads Vencord and DcPgp into your user folder, builds them and patches Discord – choose your Discord with the arrow keys and press Enter. Then quit Discord completely, start it again and enable **DcPgp** under *Settings → Vencord → Plugins*. To update, run the same command again. It is short, so you can read it before you run it.
+The [installer](install.ps1) checks Git and Node.js, downloads Vencord and DcPgp into your user folder, builds them, finds your Discord and patches it, and offers to restart Discord for you. DcPgp switches itself on. To update, run the same command again. It is short, so you can read it before you run it.
 
 ### Manual install
 
@@ -85,7 +85,7 @@ corepack pnpm build
 corepack pnpm inject
 ```
 
-Restart Discord and enable **DcPgp** under *Settings → Vencord → Plugins*.
+Quit Discord completely (also in the system tray) and start it again. DcPgp switches itself on; you find it under *Settings → Vencord → Plugins*.
 
 - **Why npm and pnpm:** the plugin brings its own libraries (OpenPGP.js and others), installed with `npm ci` in its folder; `--omit=dev` leaves out the test tools you don't need. Vencord itself is built with pnpm. If pnpm suggests an update, ignore it: Vencord sets the pnpm version it needs.
 - **Names:** this repository is `dc-pgp`, the folder must be called `dcPgp.desktop`, and in Vencord's plugin list the plugin appears as **DcPgp**.

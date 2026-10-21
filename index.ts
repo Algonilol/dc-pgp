@@ -56,6 +56,8 @@ export default definePlugin({
     name: "DcPgp",
     description: "End-to-End PGP Encryption for Discord",
     authors: [{ name: "Algoni", id: 0n }],
+    // Whoever builds Vencord with this plugin wants it: no extra trip to the plugin list after installing.
+    enabledByDefault: true,
     dependencies: ["MessageEventsAPI", "MessageAccessoriesAPI"],
     settings,
     settingsAboutComponent: SettingsPanel,
