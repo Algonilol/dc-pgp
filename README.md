@@ -66,7 +66,7 @@ git clone https://github.com/Vendicated/Vencord
 cd Vencord
 git clone https://github.com/Algonilol/dc-pgp.git src/userplugins/dcPgp.desktop
 cd src/userplugins/dcPgp.desktop
-npm ci
+npm ci --omit=dev
 cd ../../..
 corepack pnpm install --frozen-lockfile
 corepack pnpm build
@@ -75,11 +75,11 @@ corepack pnpm inject
 
 Restart Discord and enable **DcPgp** under *Settings → Vencord → Plugins*.
 
-- **Why npm and pnpm:** the plugin brings its own libraries (OpenPGP.js and others), installed with `npm ci` in its folder; Vencord itself is built with pnpm.
+- **Why npm and pnpm:** the plugin brings its own libraries (OpenPGP.js and others), installed with `npm ci` in its folder; `--omit=dev` leaves out the test tools you don't need. Vencord itself is built with pnpm. If pnpm suggests an update, ignore it: Vencord sets the pnpm version it needs.
 - **Names:** this repository is `dc-pgp`, the folder must be called `dcPgp.desktop`, and in Vencord's plugin list the plugin appears as **DcPgp**.
 - The folder name must end in `.desktop`: the plugin needs the desktop app's main process (device key, file dialogs, idle time, clipboard).
-- `pnpm inject` asks which Discord to patch (Stable, PTB, Canary); run it once per installation.
-- **Update**: `git pull` in both folders, `npm ci` in the plugin folder, `corepack pnpm build`, then restart Discord completely.
+- `pnpm inject` asks which Discord to patch (Stable, PTB, Canary): choose with the arrow keys and Enter, and run it once per installation.
+- **Update**: `git pull` in both folders, `npm ci --omit=dev` in the plugin folder, `corepack pnpm build`, then restart Discord completely.
 - **Remove DcPgp**: switch it off in the plugin list, or delete the `dcPgp.desktop` folder and build again. Your encrypted vault stays in Discord's local storage; keep your key file, so you can still decrypt old messages (for example in Kleopatra).
 - **Uninstall Vencord** from Discord: `corepack pnpm uninject`.
 - The Vencord team does not support custom plugins. Please report problems here, not to them.
