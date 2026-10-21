@@ -1,11 +1,17 @@
 # Discord-PGP (dcpgp/1)
 
+[![Tests](https://github.com/Algonilol/dc-pgp/actions/workflows/test.yml/badge.svg)](https://github.com/Algonilol/dc-pgp/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/Algonilol/dc-pgp)](https://github.com/Algonilol/dc-pgp/releases/latest)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+
 End-to-end encrypted direct messages for Discord, as a [Vencord](https://vencord.dev) userplugin.
 
 Discord already encrypts voice and video calls end-to-end – but not your text messages. Discord-PGP closes that gap: messages are signed and encrypted with OpenPGP on your PC before they reach Discord, so Discord only ever stores ciphertext. Your contact's plugin decrypts it and shows the plaintext in place of the PGP block, with a lock icon that tells you whether the sender is verified.
 
 > [!WARNING]
 > **Experimental and not independently audited.** Client mods like Vencord are against Discord's Terms of Service. Read [what it does not protect](#what-it-does-not-protect) before you rely on it. Use at your own risk – see the [disclaimer](#disclaimer).
+
+![How Discord-PGP works: your PC encrypts, Discord only stores ciphertext, your contact's PC decrypts and checks the message](docs/how-it-works.svg)
 
 ## Features
 
@@ -51,6 +57,8 @@ corepack pnpm inject
 
 Restart Discord and enable **DcPgp** under *Settings → Vencord → Plugins*.
 
+- **Why npm and pnpm:** the plugin brings its own libraries (OpenPGP.js and others), installed with `npm ci` in its folder; Vencord itself is built with pnpm.
+- **Names:** this repository is `dc-pgp`, the folder must be called `dcPgp.desktop`, and in Vencord's plugin list the plugin appears as **DcPgp**.
 - The folder name must end in `.desktop`: the plugin needs the desktop app's main process (device key, file dialogs, idle time, clipboard).
 - `pnpm inject` asks which Discord to patch (Stable, PTB, Canary); run it once per installation.
 - **Update**: `git pull` in both folders, `npm ci` in the plugin folder, `corepack pnpm build`, then restart Discord completely.
