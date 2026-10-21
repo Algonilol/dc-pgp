@@ -1,11 +1,11 @@
 # Discord-PGP (dcpgp/1)
 
-End-to-end encrypted text messages for Discord, as a [Vencord](https://vencord.dev) userplugin.
+End-to-end encrypted direct messages for Discord, as a [Vencord](https://vencord.dev) userplugin.
 
-Messages are signed and encrypted with OpenPGP on your PC before they reach Discord. Discord only ever stores ciphertext. Your contact's plugin decrypts it and shows the plaintext in place of the PGP block, with a lock icon that tells you whether the sender is verified.
+Discord already encrypts voice and video calls end-to-end – but not your text messages. Discord-PGP closes that gap: messages are signed and encrypted with OpenPGP on your PC before they reach Discord, so Discord only ever stores ciphertext. Your contact's plugin decrypts it and shows the plaintext in place of the PGP block, with a lock icon that tells you whether the sender is verified.
 
 > [!WARNING]
-> **Experimental and not audited.** Client mods like Vencord are against Discord's Terms of Service. Don't rely on this plugin where your safety depends on it – use [Signal](https://signal.org) for that.
+> **Experimental and not independently audited.** Client mods like Vencord are against Discord's Terms of Service. Read [what it does not protect](#what-it-does-not-protect) before you rely on it. Use at your own risk – see the [disclaimer](#disclaimer).
 
 ## Features
 
@@ -123,6 +123,12 @@ The tests run on plain Node.js (test runner + tsx) and need neither Discord nor 
 ## Feedback and contributing
 
 Found a bug or have an idea? Open an [issue](../../issues/new/choose) – the forms ask for what's needed. Please report security problems privately (see [SECURITY.md](SECURITY.md)). Pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Disclaimer
+
+Discord-PGP is provided "as is", without warranty of any kind (see sections 15 and 16 of the [license](LICENSE)). You use it at your own risk. The author is not responsible for how, or for what purpose, anyone uses it, nor for any damage or loss that results from its use – including actions Discord takes against an account. Every user is responsible for complying with the laws that apply to them and with Discord's Terms of Service.
+
+Discord-PGP is an independent project. It is not affiliated with, endorsed by or sponsored by Discord Inc. or the Vencord project.
 
 ## License
 

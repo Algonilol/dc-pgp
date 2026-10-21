@@ -78,7 +78,7 @@ export function showSafetyNumber(name: string, safetyNumber: string, verified: b
     return choose<VerifyChoice>(
         `Safety number with ${name}`,
         <>
-            <Paragraph>{`Compare these 60 digits once over a channel other than Discord: by phone, in person or via Signal. ${name} sees exactly the same number.`}</Paragraph>
+            <Paragraph>{`Compare these 60 digits once outside of Discord, by phone or in person. ${name} sees exactly the same number.`}</Paragraph>
             <div style={{ ...mono, fontSize: "1.15em", lineHeight: 1.7, textAlign: "center", margin: "12px 0" }}>
                 {rows.map((row, i) => <div key={i}>{row.join("  ")}</div>)}
             </div>
