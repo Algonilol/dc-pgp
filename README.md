@@ -43,6 +43,8 @@ Discord already encrypts voice and video calls end-to-end – but not your text 
 
 You need the Discord desktop app, [Git](https://git-scm.com) and [Node.js](https://nodejs.org) 20.11 or newer (LTS recommended). Custom plugins require building Vencord from source; see Vencord's guide on [installing custom plugins](https://docs.vencord.dev/installing/custom-plugins/).
 
+Run the commands in a normal PowerShell window, **not as administrator**: it starts in your user folder, where they can create the `Vencord` folder.
+
 ```powershell
 git clone https://github.com/Vendicated/Vencord
 cd Vencord
