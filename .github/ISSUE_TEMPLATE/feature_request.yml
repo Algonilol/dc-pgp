@@ -1,0 +1,24 @@
+name: Feature request
+description: An idea or a wish for Discord-PGP.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please look at the open issues and at *Known limitations* in the README first – maybe it's already planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do?
+      description: Describe the situation, not only the solution – for example "I want to send a photo in an encrypted DM".
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could Discord-PGP help?
+      description: Your idea, if you have one. If it touches security, say what it would reveal to Discord or to your contacts.
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else

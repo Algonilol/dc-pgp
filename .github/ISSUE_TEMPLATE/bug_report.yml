@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in Discord-PGP does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please **never post** your private key, key file, vault backup, passwords or decrypted messages – and check screenshots and logs for them before you upload anything.
+
+        **Security problems** (for example plaintext reaching Discord, or a way around the verification) don't belong in a public issue. Please report them privately: *Security* tab → *Report a vulnerability*.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a DM with a contact whose key is stored
+        2. Click the lock → …
+        3. …
+  - type: textarea
+    id: messages
+    attributes:
+      label: Messages and errors
+      description: The exact text of Discord-PGP's messages. Lines with "DcPgp" from Discord's developer console help a lot – remove anything private first.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Discord-PGP version
+      description: The commit you built, e.g. the output of `git log -1 --format=%h` in the plugin folder.
+    validations:
+      required: true
+  - type: dropdown
+    id: discord
+    attributes:
+      label: Discord
+      options:
+        - Stable
+        - PTB
+        - Canary
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system
+      placeholder: Windows 11
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Vault mode
+      options:
+        - Stored
+        - RAM only
+        - Not set up yet
