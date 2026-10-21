@@ -110,7 +110,7 @@ Details: [SECURITY.md](SECURITY.md) (threat model, reporting vulnerabilities) an
 - **Group DMs and server channels** are less tested than 1:1 DMs; a message is encrypted to at most 50 readers. Contacts you only write to there receive your extended key only when they ask for it.
 - **Text you copy with Ctrl+C** stays in the clipboard; only DcPgp's own copy buttons clear it.
 - **Deleted data may linger on disk**: Discord's storage (IndexedDB) does not overwrite removed entries right away.
-- **Tested so far only by the author**, with two accounts on one Windows 11 PC (Discord Stable and PTB). macOS and Linux are untested; the device key uses the system's keychain there instead of DPAPI.
+- **Tested so far only by the author**, with two accounts in the Discord desktop app on Windows 11. macOS and Linux are untested; the device key uses the system's keychain there instead of DPAPI.
 - The interface is English only.
 
 ## Development
