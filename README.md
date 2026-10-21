@@ -9,7 +9,7 @@ End-to-end encrypted direct messages for Discord, as a [Vencord](https://vencord
 Discord already encrypts voice and video calls end-to-end – but not your text messages. DcPgp closes that gap: messages are signed and encrypted with OpenPGP on your PC before they reach Discord, so Discord only ever stores ciphertext. Your contact's plugin decrypts it and shows the plaintext in place of the PGP block, with a lock icon that tells you whether the sender is verified.
 
 > [!WARNING]
-> **Experimental and not independently audited.** Client mods like Vencord are against Discord's Terms of Service. Read [what it does not protect](#what-it-does-not-protect) before you rely on it. Use at your own risk – see the [disclaimer](#disclaimer).
+> **Experimental, so far tested only by its author, and not independently audited.** Client mods like Vencord are against Discord's Terms of Service. Read [what it does not protect](#what-it-does-not-protect) before you rely on it. Use at your own risk – see the [disclaimer](#disclaimer).
 
 ![How DcPgp works: your PC encrypts, Discord only stores ciphertext, your contact's PC decrypts and checks the message](docs/how-it-works.svg)
 
@@ -62,6 +62,7 @@ Restart Discord and enable **DcPgp** under *Settings → Vencord → Plugins*.
 - The folder name must end in `.desktop`: the plugin needs the desktop app's main process (device key, file dialogs, idle time, clipboard).
 - `pnpm inject` asks which Discord to patch (Stable, PTB, Canary); run it once per installation.
 - **Update**: `git pull` in both folders, `npm ci` in the plugin folder, `corepack pnpm build`, then restart Discord completely.
+- **Remove DcPgp**: switch it off in the plugin list, or delete the `dcPgp.desktop` folder and build again. Your encrypted vault stays in Discord's local storage; keep your key file, so you can still decrypt old messages (for example in Kleopatra).
 - **Uninstall Vencord** from Discord: `corepack pnpm uninject`.
 - The Vencord team does not support custom plugins. Please report problems here, not to them.
 
@@ -109,7 +110,7 @@ Details: [SECURITY.md](SECURITY.md) (threat model, reporting vulnerabilities) an
 - **Group DMs and server channels** are less tested than 1:1 DMs; a message is encrypted to at most 50 readers. Contacts you only write to there receive your extended key only when they ask for it.
 - **Text you copy with Ctrl+C** stays in the clipboard; only DcPgp's own copy buttons clear it.
 - **Deleted data may linger on disk**: Discord's storage (IndexedDB) does not overwrite removed entries right away.
-- **Tested on Windows 11** with Discord Stable and PTB. macOS and Linux are untested; the device key uses the system's keychain there instead of DPAPI.
+- **Tested so far only by the author**, with two accounts on one Windows 11 PC (Discord Stable and PTB). macOS and Linux are untested; the device key uses the system's keychain there instead of DPAPI.
 - The interface is English only.
 
 ## Development
