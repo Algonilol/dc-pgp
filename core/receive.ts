@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { sha256Hex } from "./bytes";
 import { checkInner, type Finding, type InnerMeta, MAX_CLOCK_SKEW_MS, parseInner, type ReceiveContext } from "./format";
 import { type DecryptResult, decryptVerified, type PrivateKey, type PublicKey } from "./pgp";
 
@@ -34,6 +35,8 @@ export interface DecryptedView {
     meta: InnerMeta | null;
     signerFpr?: string;
     signedAt?: Date;
+    /** SHA-256 of the decrypted content: the same for every copy of a message, however its block is formatted. */
+    contentId: string;
 }
 
 function evaluateSignature(sig: DecryptResult["signature"], ctx: ReceiveContext, keys: ReceiveKeys): { findings: Finding[]; ok: boolean; } {
@@ -86,8 +89,13 @@ function evaluateSignature(sig: DecryptResult["signature"], ctx: ReceiveContext,
             if (fpr === keys.author.current.fpr) return { findings, ok: true };
             const old = keys.author.history.find(h => h.fpr === fpr);
             if (old) {
+                // Only a damaged vault entry lacks the time; without it, the old key proves nothing.
+                if (!(old.replacedAt > 0)) {
+                    findings.push({ level: "warning", code: "sig-old-key-unknown", text: `Signed with an older key of ${keys.author.name}, but when it was replaced is not recorded, so it is unclear whether the message is from before the switch.` });
+                    return { findings, ok: false };
+                }
                 // A replaced key may have signed older messages, but none that Discord got after the switch.
-                if (old.replacedAt > 0 && ctx.discordTimeMs > old.replacedAt + MAX_CLOCK_SKEW_MS) {
+                if (ctx.discordTimeMs > old.replacedAt + MAX_CLOCK_SKEW_MS) {
                     findings.push({ level: "error", code: "sig-replaced-key", text: `Signed with an old key of ${keys.author.name}, although it was sent after you switched to their new key. It may be forged by someone who has the old key.` });
                     return { findings, ok: false };
                 }
@@ -111,6 +119,7 @@ export async function decryptForDisplay(armored: string, ctx: ReceiveContext, ke
         : keys.author ? [keys.author.current.key, ...keys.author.history.map(h => h.key)] : [];
 
     const result = await decryptVerified(armored, keys.decryptionKeys, verificationKeys);
+    const contentId = await sha256Hex(result.data);
     const parsed = parseInner(result.data);
     const findings = checkInner(parsed, ctx);
     const sig = evaluateSignature(result.signature, ctx, keys);
@@ -132,7 +141,8 @@ export async function decryptForDisplay(armored: string, ctx: ReceiveContext, ke
         findings,
         meta: parsed.meta,
         signerFpr: result.signature.signerFingerprint,
-        signedAt: result.signature.created
+        signedAt: result.signature.created,
+        contentId
     };
 }
 
@@ -148,15 +158,16 @@ export interface CopyCheck {
 }
 
 /**
- * Every message gets its own ciphertext, so a block that shows up in a second message was replayed or
- * re-posted. `first` maps a block (hash) to the earliest message id seen with it; that one is the original.
+ * Every message has its own content (send time, random padding), so the same content in a second message
+ * means it was replayed or re-posted – even with its block re-formatted. `first` maps a content id to the
+ * earliest message id seen with it; that one is the original.
  */
-export function noteCopy(first: Map<string, string>, block: string, messageId: string, max = 5000): CopyCheck {
-    const known = first.get(block);
+export function noteCopy(first: Map<string, string>, contentId: string, messageId: string, max = 5000): CopyCheck {
+    const known = first.get(contentId);
     if (known === messageId) return { repeated: false };
     if (known !== undefined && isEarlierId(known, messageId)) return { repeated: true };
-    first.delete(block);
-    first.set(block, messageId);
+    first.delete(contentId);
+    first.set(contentId, messageId);
     while (first.size > max) first.delete(first.keys().next().value!);
     return known === undefined ? { repeated: false } : { repeated: false, demoted: known };
 }
@@ -167,6 +178,6 @@ export function markRepeated(view: DecryptedView): DecryptedView {
     return {
         ...view,
         trust: view.trust === "verified" ? "unverified" : view.trust,
-        findings: [...view.findings, { level: "warning", code: "repeated", text: "An earlier message already contained exactly this encrypted block – this one is a copy (replayed or re-posted)." }]
+        findings: [...view.findings, { level: "warning", code: "repeated", text: "An earlier message already contained exactly this encrypted message – this one is a copy (replayed or re-posted)." }]
     };
 }

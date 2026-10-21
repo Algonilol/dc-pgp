@@ -89,6 +89,7 @@ async function encryptOutgoing(channelId: string, msg: MessageObject, options: S
 
     const plan = planForChannel(props?.channel ?? ChannelStore.getChannel(channelId));
     if (plan.unsupported) return cancel("DcPgp cannot encrypt in this type of chat. Message NOT sent.");
+    if (plan.visibilityUnknown) return cancel("DcPgp cannot check who can see this channel (Discord update?). Message NOT sent.");
     if (plan.kind === "dm" && plan.missing.length) return cancel(missingText(plan.missing[0]));
     if (!plan.readers.length) return cancel("Nobody in this chat has a stored key. Message NOT sent.");
 

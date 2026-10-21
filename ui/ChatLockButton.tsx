@@ -38,6 +38,7 @@ function menuInput(channel: Channel): ChatMenuInput {
         oneShot: S.oneShot.has(channel.id),
         autoDecrypt: effectiveAutoDecrypt(settings.store.autoDecrypt, session?.data.channels[channel.id]),
         hookHealthy: S.hookHealthy,
+        visibilityUnknown: plan?.visibilityUnknown,
         readers: plan?.readers.map(r => ({ name: r.name, verified: r.contact.verified })) ?? [],
         missing: plan?.missing.map(m => ({ name: m.name, reason: m.reason })) ?? [],
         partner: session && partnerId
@@ -125,7 +126,7 @@ export const ChatLockButton: ChatBarButtonFactory = ({ channel, isAnyChat }) => 
     if (!isAnyChat || !channel) return null;
     const input = menuInput(channel);
     const model = chatButtonModel(input);
-    const dot = shouldShowEncryptedDot(input.phase, input.encrypted, input.hookHealthy);
+    const dot = shouldShowEncryptedDot(input.phase, input.encrypted, input.hookHealthy && !input.visibilityUnknown);
     return (
         <ChatBarButton
             tooltip={dot ? ENCRYPTED_TOOLTIP : model.tooltip}

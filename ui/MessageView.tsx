@@ -14,7 +14,7 @@ import { type KeyCardActionId, keyCardModel } from "../core/exchange";
 import { type KeyMessageKind, parseContent, snowflakeToMs } from "../core/format";
 import { formatFingerprint } from "../core/pgp";
 import { type DecryptedView, markRepeated } from "../core/receive";
-import { type DecryptEntry, isRepeatedBlock, type MessageLike, revealMessage, useDecryption } from "../discord/decrypt";
+import { type DecryptEntry, isRepeatedMessage, type MessageLike, revealMessage, useDecryption } from "../discord/decrypt";
 import { channelKind, nameOf } from "../discord/discordUtils";
 import { hideOriginalContent } from "../discord/hide";
 import { actOnKeyMessage, checkOfferedKey, type KeyCheck, openVerifyDialog } from "../discord/keyExchange";
@@ -207,7 +207,7 @@ function MessageAccessory({ message }: { message: AccessoryMessage; }) {
     });
     const armored = parsed.kind === "message" ? parsed.armored : null;
     const entry = useDecryption(message, display.kind === "decrypt" ? armored : null);
-    const repeated = display.kind === "decrypt" && armored != null && entry?.status === "ok" && isRepeatedBlock(message, armored);
+    const repeated = display.kind === "decrypt" && entry?.status === "ok" && entry.view != null && isRepeatedMessage(message, entry.view);
     const viewRaw = armored && canViewRawPgp(display, channelKind(ChannelStore.getChannel(message.channel_id)))
         ? () => openRawCiphertextModal(armored)
         : undefined;

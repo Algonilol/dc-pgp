@@ -17,17 +17,17 @@ const computePermissions: (o: { user: string; context: Channel; }) => unknown = 
 
 let permissionsUnavailable = false;
 
-/** Whether a member can open a server channel. If Discord's calculation is gone (after an update), everyone counts, as before. */
-function canSeeChannel(userId: string, channel: Channel): boolean {
-    if (permissionsUnavailable) return true;
+/** Whether a member can open a server channel; null once Discord's calculation is gone (after an update). */
+function canSeeChannel(userId: string, channel: Channel): boolean | null {
+    if (permissionsUnavailable) return null;
     try {
         const permissions = computePermissions({ user: userId, context: channel });
         if (typeof permissions !== "bigint") throw new Error("Unexpected permission value: " + typeof permissions);
         return (permissions & PermissionsBits.VIEW_CHANNEL) === PermissionsBits.VIEW_CHANNEL;
     } catch (e) {
         permissionsUnavailable = true;
-        logger.warn("Channel permissions cannot be checked; server messages are encrypted for every contact on the server", e);
-        return true;
+        logger.error("Channel permissions cannot be checked – encryption in server channels is paused", e);
+        return null;
     }
 }
 
@@ -93,6 +93,8 @@ export interface ChannelPlan extends RecipientPlan {
     /** True when the plan could not be computed (e.g. unsupported channel). */
     unsupported?: boolean;
     capped?: boolean;
+    /** Server channel whose viewers cannot be checked (Discord update?): nothing is encrypted for it. */
+    visibilityUnknown?: boolean;
 }
 
 /** Who can read a message encrypted in this channel, and who cannot (and why). */
@@ -113,15 +115,15 @@ export function planForChannel(channel: Channel | null | undefined): ChannelPlan
         const target = defaultTarget(S.session.data.channels[channel.id]);
         if (target.kind === "members") {
             candidates = target.userIds.map(id => candidate(id, guildId));
-        } else if (target.kind === "role") {
-            candidates = Object.keys(S.session.data.contacts)
-                .filter(id => GuildMemberStore.getMember(guildId, id)?.roles?.includes(target.roleId) && canSeeChannel(id, channel))
-                .map(id => candidate(id, guildId));
         } else {
+            const inTarget = (id: string) => target.kind === "role"
+                ? GuildMemberStore.getMember(guildId, id)?.roles?.includes(target.roleId)
+                : GuildMemberStore.isMember(guildId, id);
             // Only contacts who can open this channel: a private channel is not encrypted for the whole server.
-            candidates = Object.keys(S.session.data.contacts)
-                .filter(id => GuildMemberStore.isMember(guildId, id) && canSeeChannel(id, channel))
-                .map(id => candidate(id, guildId));
+            const visible = Object.keys(S.session.data.contacts).filter(id => inTarget(id) && canSeeChannel(id, channel) !== false);
+            // Unknown viewers: rather send nothing than encrypt for everyone on the server.
+            if (permissionsUnavailable) return { kind, readers: [], missing: [], visibilityUnknown: true };
+            candidates = visible.map(id => candidate(id, guildId));
         }
     }
 

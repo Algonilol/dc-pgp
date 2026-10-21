@@ -28,6 +28,6 @@ Helpful in a report: what an attacker needs (position, access), what they gain, 
 
 - **No forward secrecy.** OpenPGP encrypts to long-term keys. Whoever obtains a private key and old ciphertext can read those messages.
 - **Device binding uses DPAPI.** Code running as your Windows user – including other plugins inside Discord – can unwrap the device key; the vault password is then the remaining barrier.
-- **No revocation.** A contact's replaced key is not revoked: messages it signed earlier stay valid. A message signed with it that Discord received after you accepted the new key is rejected.
+- **No revocation.** A contact's replaced key is not revoked: messages it signed earlier stay valid. A message signed with it that Discord received after you accepted the new key is rejected. "Earlier" is judged by Discord's timestamp, so someone who has the old key *and* controls Discord's servers could still place backdated messages.
 - **Replays within 10 minutes.** Each message carries its signed send time and chat, so a block delivered again later is flagged. Within the 10-minute clock tolerance, a replay is only noticed while the original message is still in the chat.
 - **Not audited.** The cryptography comes from OpenPGP.js, hash-wasm (Argon2id), @noble/hashes and the Web Crypto API. The protocol around it ([PROTOCOL.md](PROTOCOL.md)) is this project's own and has not been reviewed independently.

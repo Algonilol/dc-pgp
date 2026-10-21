@@ -50,7 +50,7 @@ const CONCURRENCY = 2;
 const LOCKED: DecryptEntry = { status: "locked" };
 
 const cache = new Map<string, CacheItem>();
-/** Block hash → the earliest message shown with it; see noteCopy. */
+/** Content id → the earliest message shown with it; see noteCopy. */
 const firstCopies = new Map<string, string>();
 const subscribers = new Map<string, Set<() => void>>();
 const queue: Array<() => Promise<void>> = [];
@@ -77,6 +77,12 @@ function notify(key: string) {
 
 function notifyAll() {
     for (const key of [...subscribers.keys()]) notify(key);
+}
+
+/** All entries of one message, whatever its content. */
+function notifyMessage(messageId: string) {
+    const prefix = messageId + ":";
+    for (const key of [...subscribers.keys()]) if (key.startsWith(prefix)) notify(key);
 }
 
 function subscribeEntry(key: string, fn: () => void) {
@@ -226,17 +232,15 @@ export function useDecryption(message: MessageLike, armored: string | null): Dec
 }
 
 /**
- * Whether an earlier message already carried this block (replayed or re-posted). The local copy of a
- * message that is still being sent is left out: it carries the same block as the server's copy.
+ * Whether an earlier message already had this content (replayed or re-posted). The local copy of a
+ * message that is still being sent is left out: it has the same content as the server's copy.
  */
-export function isRepeatedBlock(message: MessageLike, armored: string): boolean {
+export function isRepeatedMessage(message: MessageLike, view: DecryptedView): boolean {
     if (message.state === "SENDING" || message.state === "SEND_FAILED") return false;
-    const check = noteCopy(firstCopies, fnv1a(armored), message.id);
+    const check = noteCopy(firstCopies, view.contentId, message.id);
     // The message noted first is the later copy after all: show it again, with the warning. Not during this render.
-    if (check.demoted) {
-        const key = entryKey(check.demoted, armored);
-        setTimeout(() => notify(key), 0);
-    }
+    const { demoted } = check;
+    if (demoted) setTimeout(() => notifyMessage(demoted), 0);
     return check.repeated;
 }
 

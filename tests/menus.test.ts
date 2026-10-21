@@ -124,6 +124,14 @@ describe("Lock menu", () => {
         assert.equal(model({ ...input, encrypted: true }).icon, "warning");
     });
 
+    it("server channel whose viewers cannot be checked: encryption paused, warning icon, no dot", () => {
+        const input = { kind: "guild" as const, partner: undefined, visibilityUnknown: true };
+        assert.match(encryptionBlocker({ ...base, ...input })!, /who can see this channel/);
+        assert.equal(entry(model(input).entries, "encrypt-all").disabled, true);
+        assert.equal(model({ ...input, encrypted: true }).icon, "warning");
+        assert.equal(entry(model({ ...input, encrypted: true }).entries, "encrypt-all").disabled, false, "switching off stays possible");
+    });
+
     it("group/server: readers and who has no key", () => {
         const m = model({ kind: "guild", partner: undefined, readers: [{ name: "A", verified: true }, { name: "B", verified: false }], missing: [{ name: "C", reason: "no-key" }] });
         assert.equal(entry(m.entries, "encrypt-all").disabled, false);

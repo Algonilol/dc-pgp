@@ -34,6 +34,8 @@ export interface ChatMenuInput {
     /** Effective value for this chat (per-chat switch or global setting). */
     autoDecrypt: boolean;
     hookHealthy: boolean;
+    /** Server channel: who can see it cannot be checked (Discord update?), so nothing is encrypted for it. */
+    visibilityUnknown?: boolean;
     readers: { name: string; verified: boolean; }[];
     missing: { name: string; reason: MissingReason; }[];
     /**
@@ -76,6 +78,7 @@ export function shouldShowEncryptedDot(phase: MenuPhase, encrypted: boolean, hoo
 /** Why encryption cannot be switched on right now, or null if it can. */
 export function encryptionBlocker(i: ChatMenuInput): string | null {
     if (!i.hookHealthy) return "The send protection is broken (Discord update?). Encryption cannot be switched on.";
+    if (i.visibilityUnknown) return "DcPgp cannot check who can see this channel (Discord update?), so encryption is paused here.";
     if (i.kind === "dm") {
         const p = i.partner;
         if (!p) return "Chat partner unknown.";
@@ -154,7 +157,7 @@ export function chatButtonModel(i: ChatMenuInput): ChatButtonModel {
 
     const active = i.encrypted || i.oneShot;
     return {
-        icon: active ? (i.hookHealthy ? "on" : "warning") : "off",
+        icon: active ? (i.hookHealthy && !i.visibilityUnknown ? "on" : "warning") : "off",
         tooltip: i.encrypted ? "Encrypted – open the lock menu" : i.oneShot ? "The next message will be encrypted" : "Not encrypted – open the lock menu",
         entries
     };

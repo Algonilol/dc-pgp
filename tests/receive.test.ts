@@ -116,6 +116,12 @@ describe("Sending and receiving", () => {
         const forged = await decryptForDisplay(after.armored, { ...ctx, discordTimeMs: late + 1500 }, keys);
         assert.equal(forged.trust, "failed");
         assert.deepEqual(forged.findings.map(f => f.code), ["sig-replaced-key"]);
+
+        // A damaged vault entry without the time: never green.
+        keys.author!.history[0].replacedAt = 0;
+        const unknown = await decryptForDisplay(before.armored, ctx, keys);
+        assert.equal(unknown.trust, "unverified");
+        assert.deepEqual(unknown.findings.map(f => f.code), ["sig-old-key-unknown"]);
     });
 
     it("signed with another contact's key: check failed", async () => {
@@ -171,6 +177,23 @@ describe("Copies of an encrypted block", () => {
         const first = new Map<string, string>();
         for (let i = 0; i < 4; i++) noteCopy(first, "h" + i, "100" + i, 3);
         assert.deepEqual([...first.keys()], ["h1", "h2", "h3"]);
+    });
+
+    it("a copy is recognized by its content, however its block is formatted", async () => {
+        const [alice, bob] = await Promise.all([gpgKey("alice"), gpgKey("bob")]);
+        const { armored } = await send(alice, [bob]);
+        // Re-wrapped lines, no checksum: what a server could re-post without breaking the signature.
+        const lines = armored.split("\n");
+        const body = lines.slice(lines.indexOf("") + 1, -1).filter(l => !l.startsWith("=")).join("");
+        const reformatted = ["-----BEGIN PGP MESSAGE-----", "", ...body.match(/.{1,40}/g)!, "-----END PGP MESSAGE-----"].join("\n");
+        assert.notEqual(reformatted, armored);
+
+        const original = await decryptForDisplay(armored, ctx, bobKeys(bob, alice, true));
+        const copy = await decryptForDisplay(reformatted, ctx, bobKeys(bob, alice, true));
+        assert.equal(copy.trust, "verified", "the signature still holds");
+        assert.equal(copy.contentId, original.contentId);
+        const other = await decryptForDisplay((await send(alice, [bob])).armored, ctx, bobKeys(bob, alice, true));
+        assert.notEqual(other.contentId, original.contentId, "the same text sent again is a new message");
     });
 
     it("a copy gets a warning and never a green lock", async () => {
