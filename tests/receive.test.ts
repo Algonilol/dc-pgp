@@ -6,7 +6,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { ownEchoVerdict } from "../core/display";
 import { parseContent } from "../core/format";
+import { checkOutgoing, isExactProtocolContent } from "../core/guard";
 import { fingerprintOf, keyHasKeyId, NotForUsError, type PrivateKey } from "../core/pgp";
 import { type CopyRef, decryptForDisplay, isCopy, isEarlierCopy, markRepeated, noteCopy, type ReceiveKeys } from "../core/receive";
 import { encryptForChannel, TooLongError } from "../core/send";
@@ -175,6 +177,43 @@ describe("Sending and receiving", () => {
         await assert.rejects(send(alice, [bob], { text: "x".repeat(1200) }), TooLongError);
         const fits = await send(alice, [bob], { text: "x".repeat(1200), maxLength: 4000 });
         assert.ok(fits.content.length <= 4000);
+    });
+});
+
+describe("A normal 1:1 DM message, end to end", () => {
+    it("goes out, passes the own-copy check and is green without any note on both sides", async () => {
+        const [alice, bob] = await Promise.all([gpgKey("alice"), gpgKey("bob")]);
+        const { content, armored } = await send(alice, [bob]);
+        const out = { encrypted: true, content, allowedPlain: false, hasPoll: false };
+
+        // The brake: what the hook built, and the same content resent without the hook (Discord's "Retry").
+        assert.deepEqual(checkOutgoing({ ...out, expected: content, fromComposer: true, seenByHook: true }), { ok: true });
+        assert.deepEqual(checkOutgoing({ ...out, fromComposer: false, seenByHook: false }), { ok: true });
+        assert.deepEqual(checkOutgoing({ ...out, content: "@silent " + content, fromComposer: false, seenByHook: false }), { ok: true });
+
+        // The server's copy of what this PC sent: checked, not reported as a leak.
+        const exact = isExactProtocolContent(content, true);
+        assert.equal(ownEchoVerdict({ sentHere: true, mustBeEncrypted: true, kind: "message", exact, hasText: true }), "verify");
+
+        // Bob reads it with Alice verified; Alice sees her own message.
+        const forBob = await decryptForDisplay(armored, ctx, bobKeys(bob, alice, true));
+        const forAlice = await decryptForDisplay(armored, { ...ctx, myId: IDS.alice }, {
+            ...bobKeys(alice, null, false),
+            ownPublic: [{ fpr: fingerprintOf(alice), key: alice.toPublic() }]
+        });
+        for (const view of [forBob, forAlice]) {
+            assert.equal(view.trust, "verified");
+            assert.deepEqual(view.findings, []);
+        }
+
+        // Shown once, and once more after scrolling: never a copy. A second message with the same text is new.
+        const first = new Map<string, CopyRef>();
+        noteCopy(first, forBob.contentId, { id: "1000", at: T0 + 1500 });
+        noteCopy(first, forBob.contentId, { id: "1000", at: T0 + 1500 });
+        assert.equal(isCopy(first, forBob.contentId, "1000"), false);
+        const again = await decryptForDisplay((await send(alice, [bob])).armored, ctx, bobKeys(bob, alice, true));
+        noteCopy(first, again.contentId, { id: "1001", at: T0 + 2500 });
+        assert.equal(isCopy(first, again.contentId, "1001"), false);
     });
 });
 

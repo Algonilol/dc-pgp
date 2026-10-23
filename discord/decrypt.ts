@@ -186,8 +186,13 @@ const isSending = (message: MessageLike) => message.state === "SENDING" || messa
 /** Notes a decrypted message for the copy check; if an earlier one shows up later, the other becomes the copy. */
 function recordCopy(message: MessageLike, view: DecryptedView) {
     if (isSending(message)) return;
-    const { demoted } = noteCopy(firstCopies, view.contentId, { id: message.id, at: discordTime(message) });
-    if (demoted) notifyMessage(demoted);
+    // Never in the way of showing the message: a failure here only costs the copy check.
+    try {
+        const { demoted } = noteCopy(firstCopies, view.contentId, { id: message.id, at: discordTime(message) });
+        if (demoted) notifyMessage(demoted);
+    } catch (e) {
+        logger.warn("Copy check failed", message.id, e);
+    }
 }
 
 /** Whether an earlier message already had this content (replayed or re-posted). */
@@ -274,6 +279,8 @@ function warm(message: MessageLike, parsed: ParsedContent) {
 
 interface PendingEcho {
     mustBeEncrypted: boolean;
+    /** What this PC sent was exactly as DcPgp builds it; judged locally, so the server's copy cannot cause a false alarm. */
+    exact: boolean;
     at: number;
 }
 
@@ -322,7 +329,7 @@ async function checkOwnEcho(message: MessageLike, parsed: ParsedContent, sent: P
         sentHere: sent != null,
         mustBeEncrypted: sent?.mustBeEncrypted ?? false,
         kind: parsed.kind,
-        exact: isExactProtocolContent(message.content ?? ""),
+        exact: sent?.exact ?? true,
         hasText: (message.content ?? "").trim().length > 0
     });
     if (verdict === "leak") await reportLeak(message);
@@ -353,9 +360,11 @@ export function handleMessageCreate(message: any, optimistic: boolean) {
             const now = Date.now();
             prunePending(now);
             const channelId: string = message.channel_id;
+            const exact = isExactProtocolContent(message.content ?? "", true);
             pendingEcho.set(nonce, {
                 // "Next message only" is used up before this copy exists; a block exactly as we build it shows it.
-                mustBeEncrypted: isChannelEncrypted(channelId) || S.oneShot.has(channelId) || (parsed.kind === "message" && isExactProtocolContent(message.content ?? "", true)),
+                mustBeEncrypted: isChannelEncrypted(channelId) || S.oneShot.has(channelId) || (parsed.kind === "message" && exact),
+                exact,
                 at: now
             });
         } else {
