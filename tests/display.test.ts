@@ -112,9 +112,11 @@ describe("View Raw PGP", () => {
 describe("Checking our own sent messages", () => {
     it("verdict: verify, leak or skip", () => {
         const v = (over: Partial<Parameters<typeof ownEchoVerdict>[0]>) =>
-            ownEchoVerdict({ sentHere: true, mustBeEncrypted: true, kind: "none", hasText: true, ...over });
+            ownEchoVerdict({ sentHere: true, mustBeEncrypted: true, kind: "none", exact: false, hasText: true, ...over });
         assert.equal(v({}), "leak", "plaintext in an encrypted chat from this PC");
-        assert.equal(v({ kind: "message" }), "verify");
+        assert.equal(v({ kind: "message", exact: true }), "verify");
+        assert.equal(v({ kind: "message" }), "leak", "text written around the block went out as plaintext");
+        assert.equal(v({ kind: "message", mustBeEncrypted: false }), "verify", "a pasted block with a comment in a normal chat");
         assert.equal(v({ mustBeEncrypted: false }), "skip");
         assert.equal(v({ hasText: false }), "skip", "sticker/empty only: no text revealed");
         assert.equal(v({ kind: "keyreq" }), "skip");

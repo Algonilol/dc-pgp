@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { snowflakeTime } from "./format";
 import { setChannelEncryption } from "./menus";
-import type { Contact, VaultData } from "./model";
+import type { Contact, KeyHistoryEntry, VaultData } from "./model";
 import { armorKey, fingerprintOf, inspectKey, keyExpiry, type KeyReport, mergeKeyCopies, PgpUserError, type PublicKey, readPublicKey } from "./pgp";
 
 export interface IncomingKey {
@@ -47,11 +48,27 @@ export function classifyIncomingKey(fpr: string, authorId: string, data: VaultDa
 
 const expiryOf = (incoming: IncomingKey) => incoming.report.expires?.getTime() ?? null;
 
-export function addOrReplaceContact(data: VaultData, userId: string, name: string, incoming: IncomingKey, now = Date.now()): Contact {
+/**
+ * When the current key counts as replaced: when the new one was announced, by Discord's (server) time of
+ * the key message – no PC clock involved. An announcement older than the current key itself is stale (an old
+ * key message accepted late), so then it is the moment the user accepted it.
+ */
+function switchTime(current: Contact, announcedAt: number | null, now: number): number {
+    return announcedAt != null && announcedAt > current.addedAt ? announcedAt : now;
+}
+
+/** The current key moves to the history; the incoming one leaves it, so a key used again starts afresh. */
+function retireCurrentKey(current: Contact, incomingFpr: string, replacedAt: number): KeyHistoryEntry[] {
+    const rest = current.history.filter(h => h.fpr !== current.fpr && h.fpr !== incomingFpr);
+    return [{ publicKey: current.publicKey, fpr: current.fpr, replacedAt }, ...rest].slice(0, 10);
+}
+
+/** `messageId`: the key message, whose Discord time dates the key change. */
+export function addOrReplaceContact(data: VaultData, userId: string, name: string, incoming: IncomingKey, now = Date.now(), messageId?: string): Contact {
     const existing = data.contacts[userId];
-    const history = existing ? [...existing.history] : [];
-    if (existing && existing.fpr !== incoming.fpr && !history.some(h => h.fpr === existing.fpr))
-        history.unshift({ publicKey: existing.publicKey, fpr: existing.fpr, replacedAt: now });
+    const history = !existing ? []
+        : existing.fpr === incoming.fpr ? existing.history
+            : retireCurrentKey(existing, incoming.fpr, switchTime(existing, snowflakeTime(messageId), now));
 
     const contact: Contact = {
         userId,
@@ -61,7 +78,7 @@ export function addOrReplaceContact(data: VaultData, userId: string, name: strin
         verified: existing?.fpr === incoming.fpr ? existing.verified : false,
         ...(existing?.fpr === incoming.fpr && existing.verifiedAt ? { verifiedAt: existing.verifiedAt } : {}),
         addedAt: existing?.fpr === incoming.fpr ? existing.addedAt : now,
-        history: history.slice(0, 10),
+        history,
         keyExpires: expiryOf(incoming),
         // Which copy of OUR key they have does not depend on their key.
         ...(existing?.sentKeyAt != null ? { sentKeyAt: existing.sentKeyAt } : {})
@@ -170,16 +187,16 @@ export function forgetContact(data: VaultData, userId: string, dmChannelId: stri
 export function acceptPendingKey(data: VaultData, userId: string, now = Date.now()): Contact | null {
     const c = data.contacts[userId];
     if (!c?.pendingKey) return null;
-    const { publicKey, fpr, keyExpires } = c.pendingKey;
-    if (!c.history.some(h => h.fpr === c.fpr)) c.history.unshift({ publicKey: c.publicKey, fpr: c.fpr, replacedAt: now });
+    const { publicKey, fpr, keyExpires, messageId } = c.pendingKey;
+    c.history = retireCurrentKey(c, fpr, switchTime(c, snowflakeTime(messageId), now));
     c.publicKey = publicKey;
     c.fpr = fpr;
+    c.addedAt = now;
     c.verified = false;
     delete c.verifiedAt;
     delete c.pendingKey;
     // Unknown for key changes stored by older versions: computed again after the next unlock.
     if (keyExpires !== undefined) c.keyExpires = keyExpires;
     else delete c.keyExpires;
-    c.history = c.history.slice(0, 10);
     return c;
 }

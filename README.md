@@ -35,7 +35,7 @@ More details: [PROTOCOL.md](PROTOCOL.md) (wire format, key lifetime, vault) · [
 - **Key exchange inside Discord**: a key request is an ordinary message; your contact accepts it with one click on the card under it. If you both send a request at the same time, the exchange completes on its own.
 - **Verification with safety numbers**: 60 digits you compare once on a call or in person. Key changes are never accepted silently.
 - **Keys that don't run out**: a year before your key expires, DcPgp extends it – same key, same safety number. Your contacts receive the update automatically.
-- **Made for 1:1 DMs**; group DMs and server channels work too: each message is readable for everyone in the chat whose key you have – in a server channel, for those who can see the channel.
+- **Made for 1:1 DMs**; group DMs and server channels work too: each message is readable for everyone in the chat whose key you have – in a server channel, for those who can see the channel (in a thread: the channel it belongs to).
 - **Signed metadata inside the encryption** (sender, chat, recipients, time) exposes re-posted, forwarded or replayed messages.
 - **Fail-closed send protection**: in an encrypted chat nothing leaves unencrypted. The plugin is the first pre-send hook, an emergency brake guards Discord's own send and edit functions, drafts of encrypted chats are never written to disk, and a check verifies that your own messages arrive at Discord encrypted.
 - **Local vault** for your key and contacts (AES-256-GCM), unlocked with a password (Argon2id, 256 MiB) and bound to your PC through Windows DPAPI – or "RAM only" mode, where nothing secret is stored and you unlock with your key file.

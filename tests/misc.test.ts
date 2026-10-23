@@ -13,7 +13,7 @@ import { emptyVaultData } from "../core/model";
 import { generatePassphrase, parseWordlist, passphraseEntropyBits } from "../core/passphrase";
 import { armorKey, minimalPublicKey, PgpUserError } from "../core/pgp";
 import { formatSafetyNumber, safetyNumber } from "../core/safetyNumber";
-import { findMentions, hasMentions, mentionSuffix, planRecipients } from "../core/send";
+import { planRecipients } from "../core/send";
 import { checkStrength } from "../core/strength";
 import { fixture, gpgKey, IDS } from "./helpers";
 
@@ -109,12 +109,5 @@ describe("Contacts", () => {
         ], { [IDS.other]: 1 }, IDS.alice);
         assert.deepEqual(plan.readers.map(r => r.userId), [IDS.bob]);
         assert.deepEqual(plan.missing.map(m => [m.userId, m.reason]), [[IDS.carol, "no-key"], [IDS.other, "blocked"]]);
-    });
-
-    it("finds mentions", () => {
-        const m = findMentions("hi <@123> and <@!456> <@&789> @everyone `@here`");
-        assert.deepEqual(m, { users: ["123", "456"], roles: ["789"], everyone: true });
-        assert.equal(mentionSuffix(m), "<@123> <@456> <@&789> @everyone");
-        assert.equal(hasMentions(findMentions("no mention")), false);
     });
 });

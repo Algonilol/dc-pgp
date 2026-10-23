@@ -175,7 +175,7 @@ export function keyCardModel(i: KeyCardInput): KeyCardModel {
 
 /** Stores the key (unverified) and marks the message as dealt with. */
 export function applyAccept(data: VaultData, authorId: string, name: string, incoming: IncomingKey, messageId: string, now = Date.now()): Contact {
-    const contact = addOrReplaceContact(data, authorId, name, incoming, now);
+    const contact = addOrReplaceContact(data, authorId, name, incoming, now, messageId);
     delete data.outgoing[authorId];
     data.handled[messageId] = { at: now, result: "accepted" };
     return contact;
@@ -183,7 +183,7 @@ export function applyAccept(data: VaultData, authorId: string, name: string, inc
 
 export function applyStoreResponse(data: VaultData, authorId: string, name: string, incoming: IncomingKey, messageId: string, now = Date.now()): Contact {
     const requestedAt = data.outgoing[authorId]?.at;
-    const contact = addOrReplaceContact(data, authorId, name, incoming, now);
+    const contact = addOrReplaceContact(data, authorId, name, incoming, now, messageId);
     // Our request carried our key as it was then.
     if (requestedAt != null) contact.sentKeyAt = Math.max(contact.sentKeyAt ?? 0, requestedAt);
     delete data.outgoing[authorId];

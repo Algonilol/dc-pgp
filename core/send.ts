@@ -1,5 +1,5 @@
 /*
- * DcPgp – sending: encrypting for a chat, planning the recipients, mentions
+ * DcPgp – sending: encrypting for a chat, planning the recipients
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -26,8 +26,6 @@ export interface EncryptRequest {
     signer: PrivateKey;
     time: number;
     maxLength: number;
-    /** Unencrypted line appended after the block, e.g. mentions that should still ping. */
-    visibleSuffix?: string;
 }
 
 export async function encryptForChannel(req: EncryptRequest): Promise<string> {
@@ -39,7 +37,8 @@ export async function encryptForChannel(req: EncryptRequest): Promise<string> {
     });
     const armored = await encryptSigned(inner, [...req.recipients.map(r => r.key), req.ownPublic], req.signer);
     inner.fill(0);
-    const content = buildMessageContent(armored) + (req.visibleSuffix ? "\n" + req.visibleSuffix : "");
+    // Nothing may follow the block: the send brake only lets content out exactly as built here.
+    const content = buildMessageContent(armored);
     const length = discordLength(content);
     if (length > req.maxLength) throw new TooLongError(length, req.maxLength);
     return content;
@@ -71,25 +70,4 @@ export function planRecipients(candidates: RecipientCandidate[], blocked: Record
         else plan.readers.push({ userId: c.userId, name: c.name, contact: c.contact });
     }
     return plan;
-}
-
-export interface MentionInfo {
-    users: string[];
-    roles: string[];
-    everyone: boolean;
-}
-
-export function findMentions(content: string): MentionInfo {
-    const users = [...content.matchAll(/<@!?(\d{1,25})>/g)].map(m => m[1]);
-    const roles = [...content.matchAll(/<@&(\d{1,25})>/g)].map(m => m[1]);
-    const everyone = /(^|[^`\\])@(everyone|here)\b/.test(content);
-    return { users: [...new Set(users)], roles: [...new Set(roles)], everyone };
-}
-
-export function hasMentions(m: MentionInfo): boolean {
-    return m.users.length > 0 || m.roles.length > 0 || m.everyone;
-}
-
-export function mentionSuffix(m: MentionInfo): string {
-    return [...m.users.map(u => `<@${u}>`), ...m.roles.map(r => `<@&${r}>`), ...(m.everyone ? ["@everyone"] : [])].join(" ");
 }

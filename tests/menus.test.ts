@@ -136,9 +136,11 @@ describe("Lock menu", () => {
         const m = model({ kind: "guild", partner: undefined, readers: [{ name: "A", verified: true }, { name: "B", verified: false }], missing: [{ name: "C", reason: "no-key" }] });
         assert.equal(entry(m.entries, "encrypt-all").disabled, false);
         assert.equal(entry(m.entries, "readers").label, "Readable by: A ✓, B");
-        assert.equal(entry(m.entries, "missing").label, "Without a key: C");
+        assert.equal(entry(m.entries, "missing").label, "Not readable for: C (no key)");
+        const reasons = model({ kind: "group", partner: undefined, missing: [{ name: "D", reason: "blocked" }, { name: "E", reason: "key-changed" }, { name: "F", reason: "key-expired" }] });
+        assert.equal(entry(reasons.entries, "missing").label, "Not readable for: D (blocked), E (new key not confirmed), F (key expired)");
         const many = model({ kind: "group", partner: undefined, missing: "CDEFGHI".split("").map(name => ({ name, reason: "no-key" as const })) });
-        assert.equal(entry(many.entries, "missing").label, "Without a key: C, D, E, F, G and 2 more");
+        assert.equal(entry(many.entries, "missing").label, "Not readable for: C (no key), D (no key), E (no key), F (no key), G (no key) and 2 more");
         assert.equal(entry(model({ kind: "group", partner: undefined }).entries, "encrypt-all").disabled, true);
     });
 

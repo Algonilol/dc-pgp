@@ -27,7 +27,7 @@ export interface Session {
     ownPublic: PublicKey;
     oldPrivate: PrivateKey[];
     /** Own current and retired public keys, current first. */
-    ownPublicList: { fpr: string; key: PublicKey; }[];
+    ownPublicList: { fpr: string; key: PublicKey; retiredAt?: number; }[];
 }
 
 class State {

@@ -85,8 +85,8 @@ async function buildSession(file: VaultFile, open: OpenVault, privateKey?: Priva
     });
     const oldPrivate = (await Promise.all(data.oldKeys.filter(k => k.privateKey).map(k => readPrivateKey(k.privateKey!).catch(() => null))))
         .filter((k): k is PrivateKey => k != null);
-    const oldPublic = (await Promise.all(data.oldKeys.map(async k => ({ fpr: k.fpr, key: await readPublicKey(k.publicKey).catch(() => null) }))))
-        .filter((k): k is { fpr: string; key: PublicKey; } => k.key != null);
+    const oldPublic = (await Promise.all(data.oldKeys.map(async k => ({ fpr: k.fpr, key: await readPublicKey(k.publicKey).catch(() => null), retiredAt: k.retiredAt }))))
+        .filter((k): k is { fpr: string; key: PublicKey; retiredAt: number; } => k.key != null);
     // Own messages are checked against the full key: the copy for contacts only has the newest self-signatures.
     return { file, dek: open.dek, data, privateKey: priv, ownPublic, oldPrivate, ownPublicList: [{ fpr: data.self.fpr, key: priv.toPublic() }, ...oldPublic] };
 }

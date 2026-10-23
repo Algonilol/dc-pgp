@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 
 import { parseContent } from "../core/format";
 import { fingerprintOf, keyHasKeyId, NotForUsError, type PrivateKey } from "../core/pgp";
-import { decryptForDisplay, isEarlierId, markRepeated, noteCopy, type ReceiveKeys } from "../core/receive";
+import { type CopyRef, decryptForDisplay, isCopy, isEarlierCopy, markRepeated, noteCopy, type ReceiveKeys } from "../core/receive";
 import { encryptForChannel, TooLongError } from "../core/send";
 import { gpgKey, IDS } from "./helpers";
 
@@ -140,6 +140,25 @@ describe("Sending and receiving", () => {
         assert.equal(view.trust, "verified");
     });
 
+    it("an own replaced key: fine before it was retired, an error after", async () => {
+        const [alice, bob, old] = await Promise.all([gpgKey("alice"), gpgKey("bob"), gpgKey("rsa")]);
+        const retiredAt = T0 + 60_000;
+        // Opened with Bob's key (a recipient); what counts is that the author is "me".
+        const keys: ReceiveKeys = {
+            ...bobKeys(bob, null, false),
+            ownPublic: [{ fpr: fingerprintOf(alice), key: alice.toPublic() }, { fpr: fingerprintOf(old), key: old.toPublic(), retiredAt }]
+        };
+        const me = { ...ctx, myId: IDS.alice };
+        const before = await send(old, [bob]);
+        assert.equal((await decryptForDisplay(before.armored, me, keys)).trust, "verified");
+
+        const late = retiredAt + 60 * 60_000;
+        const after = await send(old, [bob], { time: late });
+        const view = await decryptForDisplay(after.armored, { ...me, discordTimeMs: late + 1500 }, keys);
+        assert.equal(view.trust, "failed");
+        assert.deepEqual(view.findings.map(f => f.code), ["sig-replaced-key"]);
+    });
+
     it("group: every recipient reads it, outsiders don't", async () => {
         const [alice, bob, rsa] = await Promise.all([gpgKey("alice"), gpgKey("bob"), gpgKey("rsa")]);
         const { armored } = await send(alice, [bob, rsa], { channel: IDS.other });
@@ -160,22 +179,34 @@ describe("Sending and receiving", () => {
 });
 
 describe("Copies of an encrypted block", () => {
+    const at = (id: string, time = Number(id)) => ({ id, at: time });
+
     it("the earliest message is the original, later ones are copies", () => {
-        const first = new Map<string, string>();
-        assert.deepEqual(noteCopy(first, "h1", "1000"), { repeated: false });
-        assert.deepEqual(noteCopy(first, "h1", "1000"), { repeated: false }, "the same message again");
-        assert.deepEqual(noteCopy(first, "h1", "2000"), { repeated: true });
-        assert.deepEqual(noteCopy(first, "h1", "999"), { repeated: false, demoted: "1000" }, "an older message shows up later (scrolling up)");
-        assert.deepEqual(noteCopy(first, "h1", "1000"), { repeated: true });
-        assert.deepEqual(noteCopy(first, "h2", "2000"), { repeated: false }, "another block");
+        const first = new Map<string, CopyRef>();
+        assert.deepEqual(noteCopy(first, "h1", at("1000")), { repeated: false });
+        assert.deepEqual(noteCopy(first, "h1", at("1000")), { repeated: false }, "the same message again");
+        assert.deepEqual(noteCopy(first, "h1", at("2000")), { repeated: true });
+        assert.equal(isCopy(first, "h1", "2000"), true);
+        assert.equal(isCopy(first, "h1", "1000"), false);
+        assert.deepEqual(noteCopy(first, "h1", at("999")), { repeated: false, demoted: "1000" }, "an older message shows up later (scrolling up)");
+        assert.equal(isCopy(first, "h1", "1000"), true);
+        assert.deepEqual(noteCopy(first, "h2", at("2000")), { repeated: false }, "another content");
+        assert.equal(isCopy(first, "h3", "5"), false, "nothing recorded");
     });
 
-    it("compares snowflakes as numbers and forgets the oldest blocks first", () => {
-        assert.equal(isEarlierId("999", "1000"), true);
-        assert.equal(isEarlierId("1000", "999"), false);
-        assert.equal(isEarlierId("1000", "1000"), false);
-        const first = new Map<string, string>();
-        for (let i = 0; i < 4; i++) noteCopy(first, "h" + i, "100" + i, 3);
+    it("an old message edited to carry a newer block is the copy", () => {
+        const first = new Map<string, CopyRef>();
+        noteCopy(first, "h", at("500"));
+        assert.deepEqual(noteCopy(first, "h", at("300", 600)), { repeated: true }, "id 300, but edited at 600");
+    });
+
+    it("compares by time, then snowflakes as numbers, and forgets the oldest entries first", () => {
+        assert.equal(isEarlierCopy(at("999"), at("1000")), true);
+        assert.equal(isEarlierCopy(at("999", 5), at("1000", 5)), true);
+        assert.equal(isEarlierCopy(at("1000", 5), at("999", 5)), false);
+        assert.equal(isEarlierCopy(at("1000"), at("1000")), false);
+        const first = new Map<string, CopyRef>();
+        for (let i = 0; i < 4; i++) noteCopy(first, "h" + i, at("100" + i), 3);
         assert.deepEqual([...first.keys()], ["h1", "h2", "h3"]);
     });
 

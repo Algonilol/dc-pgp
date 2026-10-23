@@ -62,6 +62,13 @@ export interface ChatButtonModel {
 
 const info = (id: string, label: string): MenuEntry => ({ type: "info", id, label });
 
+const MISSING_REASON: Record<MissingReason, string> = {
+    "no-key": "no key",
+    "key-changed": "new key not confirmed",
+    "key-expired": "key expired",
+    blocked: "blocked"
+};
+
 /** "A, B, C" – long lists end in "and N more", so the menu stays short. */
 function nameList(names: string[], max = 5): string {
     return names.length <= max ? names.join(", ") : `${names.slice(0, max).join(", ")} and ${names.length - max} more`;
@@ -152,7 +159,7 @@ export function chatButtonModel(i: ChatMenuInput): ChatButtonModel {
     if (i.readers.length)
         entries.push(info("readers", "Readable by: " + i.readers.map(r => r.name + (r.verified ? " ✓" : "")).join(", ")));
     if (i.kind !== "dm" && i.missing.length)
-        entries.push(info("missing", "Without a key: " + nameList(i.missing.map(m => m.name))));
+        entries.push(info("missing", "Not readable for: " + nameList(i.missing.map(m => `${m.name} (${MISSING_REASON[m.reason]})`))));
     entries.push({ type: "separator", id: "sep-lock" }, { type: "action", id: "lock", label: "Lock now" });
 
     const active = i.encrypted || i.oneShot;

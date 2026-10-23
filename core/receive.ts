@@ -13,14 +13,14 @@ export interface AuthorKeys {
     name: string;
     verified: boolean;
     current: { fpr: string; key: PublicKey; };
-    /** Replaced keys; `replacedAt`: when the user accepted the next key (ms, 0 = unknown). */
+    /** Replaced keys; `replacedAt`: when the next key was announced (Discord's time, ms; 0 = not recorded). */
     history: { fpr: string; key: PublicKey; replacedAt: number; }[];
 }
 
 export interface ReceiveKeys {
     decryptionKeys: PrivateKey[];
-    /** Own public keys (current first). Used when the author is the current user. */
-    ownPublic: { fpr: string; key: PublicKey; }[];
+    /** Own public keys (current first; `retiredAt` only for replaced ones, 0 = not recorded). Used when the author is the current user. */
+    ownPublic: { fpr: string; key: PublicKey; retiredAt?: number; }[];
     /** Stored key(s) of the author, or null if the author is not a contact. */
     author: AuthorKeys | null;
     authorName: string;
@@ -37,6 +37,15 @@ export interface DecryptedView {
     signedAt?: Date;
     /** SHA-256 of the decrypted content: the same for every copy of a message, however its block is formatted. */
     contentId: string;
+}
+
+/** A replaced key may have signed earlier messages, but none that Discord got after the switch (`at`; 0 = not recorded). */
+function replacedKeyProblem(at: number, ctx: ReceiveContext, whose: string): Finding | null {
+    if (!(at > 0))
+        return { level: "warning", code: "sig-old-key-unknown", text: `Signed with ${whose} old key, but when it was replaced is not recorded, so it is unclear whether the message is from before the switch.` };
+    if (ctx.discordTimeMs > at + MAX_CLOCK_SKEW_MS)
+        return { level: "error", code: "sig-replaced-key", text: `Signed with ${whose} old key, although it was sent after the key was replaced. It may be forged by someone who has the old key.` };
+    return null;
 }
 
 function evaluateSignature(sig: DecryptResult["signature"], ctx: ReceiveContext, keys: ReceiveKeys): { findings: Finding[]; ok: boolean; } {
@@ -78,9 +87,14 @@ function evaluateSignature(sig: DecryptResult["signature"], ctx: ReceiveContext,
         case "valid": {
             const fpr = sig.signerFingerprint;
             if (isMe) {
-                if (fpr && keys.ownPublic.some(k => k.fpr === fpr)) return { findings, ok: true };
-                findings.push({ level: "error", code: "sig-foreign", text: "This message under your name is signed with someone else's key." });
-                return { findings, ok: false };
+                const own = fpr ? keys.ownPublic.find(k => k.fpr === fpr) : undefined;
+                if (!own) {
+                    findings.push({ level: "error", code: "sig-foreign", text: "This message under your name is signed with someone else's key." });
+                    return { findings, ok: false };
+                }
+                const problem = own.retiredAt === undefined ? null : replacedKeyProblem(own.retiredAt, ctx, "your");
+                if (problem) findings.push(problem);
+                return { findings, ok: !problem };
             }
             if (!keys.author || !fpr) {
                 findings.push({ level: "warning", code: "sig-unknown-sender", text: `No key of ${keys.authorName} is stored, so the signature cannot be checked.` });
@@ -89,18 +103,9 @@ function evaluateSignature(sig: DecryptResult["signature"], ctx: ReceiveContext,
             if (fpr === keys.author.current.fpr) return { findings, ok: true };
             const old = keys.author.history.find(h => h.fpr === fpr);
             if (old) {
-                // Only a damaged vault entry lacks the time; without it, the old key proves nothing.
-                if (!(old.replacedAt > 0)) {
-                    findings.push({ level: "warning", code: "sig-old-key-unknown", text: `Signed with an older key of ${keys.author.name}, but when it was replaced is not recorded, so it is unclear whether the message is from before the switch.` });
-                    return { findings, ok: false };
-                }
-                // A replaced key may have signed older messages, but none that Discord got after the switch.
-                if (ctx.discordTimeMs > old.replacedAt + MAX_CLOCK_SKEW_MS) {
-                    findings.push({ level: "error", code: "sig-replaced-key", text: `Signed with an old key of ${keys.author.name}, although it was sent after you switched to their new key. It may be forged by someone who has the old key.` });
-                    return { findings, ok: false };
-                }
-                findings.push({ level: "info", code: "sig-old-key", text: `Signed with an older key of ${keys.author.name}.` });
-                return { findings, ok: true };
+                const problem = replacedKeyProblem(old.replacedAt, ctx, `${keys.author.name}'s`);
+                findings.push(problem ?? { level: "info", code: "sig-old-key", text: `Signed with an older key of ${keys.author.name}.` });
+                return { findings, ok: !problem };
             }
             findings.push({ level: "error", code: "sig-wrong-key", text: `Signed with a key that does not belong to ${keys.author.name}.` });
             return { findings, ok: false };
@@ -146,9 +151,17 @@ export async function decryptForDisplay(armored: string, ctx: ReceiveContext, ke
     };
 }
 
-/** Snowflake ids grow with time; compared as numbers without BigInt. */
-export function isEarlierId(a: string, b: string): boolean {
-    return a.length !== b.length ? a.length < b.length : a < b;
+/** A message as the copy check sees it: its id, and Discord's time for it with the latest edit counted. */
+export interface CopyRef {
+    id: string;
+    at: number;
+}
+
+/** Earlier by Discord's time – so an old message edited to carry a newer block counts as later – then by id. */
+export function isEarlierCopy(a: CopyRef, b: CopyRef): boolean {
+    if (a.at !== b.at) return a.at < b.at;
+    // Snowflake ids grow with time; compared as numbers without BigInt.
+    return a.id.length !== b.id.length ? a.id.length < b.id.length : a.id < b.id;
 }
 
 export interface CopyCheck {
@@ -160,16 +173,22 @@ export interface CopyCheck {
 /**
  * Every message has its own content (send time, random padding), so the same content in a second message
  * means it was replayed or re-posted – even with its block re-formatted. `first` maps a content id to the
- * earliest message id seen with it; that one is the original.
+ * earliest message seen with it; that one is the original.
  */
-export function noteCopy(first: Map<string, string>, contentId: string, messageId: string, max = 5000): CopyCheck {
+export function noteCopy(first: Map<string, CopyRef>, contentId: string, message: CopyRef, max = 5000): CopyCheck {
     const known = first.get(contentId);
-    if (known === messageId) return { repeated: false };
-    if (known !== undefined && isEarlierId(known, messageId)) return { repeated: true };
+    if (known?.id === message.id) return { repeated: false };
+    if (known !== undefined && isEarlierCopy(known, message)) return { repeated: true };
     first.delete(contentId);
-    first.set(contentId, messageId);
+    first.set(contentId, message);
     while (first.size > max) first.delete(first.keys().next().value!);
-    return known === undefined ? { repeated: false } : { repeated: false, demoted: known };
+    return known === undefined ? { repeated: false } : { repeated: false, demoted: known.id };
+}
+
+/** Whether a message is a later copy, going by what noteCopy has recorded. */
+export function isCopy(first: Map<string, CopyRef>, contentId: string, messageId: string): boolean {
+    const known = first.get(contentId);
+    return known !== undefined && known.id !== messageId;
 }
 
 /** The view of a copy: a warning, and never a green lock. */

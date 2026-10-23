@@ -87,13 +87,16 @@ export interface EchoInput {
     /** The chat was encrypted, or "next message only" was armed, when the message was sent. */
     mustBeEncrypted: boolean;
     kind: ContentKind;
+    /** The content is exactly what DcPgp builds: nothing written around the block. */
+    exact: boolean;
     hasText: boolean;
 }
 
 /** What to do when Discord's server returns a message we sent. */
 export function ownEchoVerdict(i: EchoInput): EchoVerdict {
     if (!i.sentHere) return "skip";
-    if (i.kind === "message") return "verify";
+    // Text around a block in an encrypted chat went out as plaintext, even though the block is fine.
+    if (i.kind === "message") return i.exact || !i.mustBeEncrypted ? "verify" : "leak";
     if (i.kind !== "none" || !i.hasText) return "skip";
     return i.mustBeEncrypted ? "leak" : "skip";
 }

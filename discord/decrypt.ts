@@ -9,9 +9,10 @@ import { ChannelStore, MessageActions, useEffect, useReducer } from "@webpack/co
 
 import { type EchoResult, effectiveAutoDecrypt, ownEchoProblems, ownEchoVerdict } from "../core/display";
 import { parseContent, type ParsedContent, snowflakeToMs } from "../core/format";
+import { isExactProtocolContent } from "../core/guard";
 import { setChannelAutoDecrypt } from "../core/menus";
 import { keyHasKeyId, NotForUsError } from "../core/pgp";
-import { type DecryptedView, decryptForDisplay, noteCopy, type ReceiveKeys } from "../core/receive";
+import { type CopyRef, type DecryptedView, decryptForDisplay, isCopy, noteCopy, type ReceiveKeys } from "../core/receive";
 import { settings } from "../settings";
 import { confirmDialog, toastError } from "../ui/dialogs";
 import { nameOf } from "./discordUtils";
@@ -50,8 +51,8 @@ const CONCURRENCY = 2;
 const LOCKED: DecryptEntry = { status: "locked" };
 
 const cache = new Map<string, CacheItem>();
-/** Content id → the earliest message shown with it; see noteCopy. */
-const firstCopies = new Map<string, string>();
+/** Content id → the earliest message decrypted with it; see noteCopy. */
+const firstCopies = new Map<string, CopyRef>();
 const subscribers = new Map<string, Set<() => void>>();
 const queue: Array<() => Promise<void>> = [];
 let running = 0;
@@ -172,10 +173,26 @@ function enqueue(key: string, message: MessageLike, armored: string) {
             }
         }
         if (S.session !== session) return;
+        if (entry.view) recordCopy(message, entry.view);
         remember(key, { entry, gen });
         notify(key);
     });
     pump();
+}
+
+/** The local copy of a message that is still being sent: it has the same content as the server's copy. */
+const isSending = (message: MessageLike) => message.state === "SENDING" || message.state === "SEND_FAILED";
+
+/** Notes a decrypted message for the copy check; if an earlier one shows up later, the other becomes the copy. */
+function recordCopy(message: MessageLike, view: DecryptedView) {
+    if (isSending(message)) return;
+    const { demoted } = noteCopy(firstCopies, view.contentId, { id: message.id, at: discordTime(message) });
+    if (demoted) notifyMessage(demoted);
+}
+
+/** Whether an earlier message already had this content (replayed or re-posted). */
+export function isRepeatedMessage(message: MessageLike, view: DecryptedView): boolean {
+    return !isSending(message) && isCopy(firstCopies, view.contentId, message.id);
 }
 
 /** Returns the cached result or starts decrypting; subscribers of the entry are notified when it is ready. */
@@ -229,19 +246,6 @@ export function useDecryption(message: MessageLike, armored: string | null): Dec
         return unsubscribe;
     }, [key]);
     return entry;
-}
-
-/**
- * Whether an earlier message already had this content (replayed or re-posted). The local copy of a
- * message that is still being sent is left out: it has the same content as the server's copy.
- */
-export function isRepeatedMessage(message: MessageLike, view: DecryptedView): boolean {
-    if (message.state === "SENDING" || message.state === "SEND_FAILED") return false;
-    const check = noteCopy(firstCopies, view.contentId, message.id);
-    // The message noted first is the later copy after all: show it again, with the warning. Not during this render.
-    const { demoted } = check;
-    if (demoted) setTimeout(() => notifyMessage(demoted), 0);
-    return check.repeated;
 }
 
 export function revealMessage(messageId: string) {
@@ -318,6 +322,7 @@ async function checkOwnEcho(message: MessageLike, parsed: ParsedContent, sent: P
         sentHere: sent != null,
         mustBeEncrypted: sent?.mustBeEncrypted ?? false,
         kind: parsed.kind,
+        exact: isExactProtocolContent(message.content ?? ""),
         hasText: (message.content ?? "").trim().length > 0
     });
     if (verdict === "leak") await reportLeak(message);
@@ -329,7 +334,10 @@ function adoptOptimistic(nonce: string, message: MessageLike, parsed: ParsedCont
     if (parsed.kind !== "message") return;
     const from = cache.get(entryKey(nonce, parsed.armored));
     const to = entryKey(message.id, parsed.armored);
-    if (from && from.entry.status !== "pending" && !cache.has(to)) remember(to, { entry: from.entry, gen: from.gen });
+    if (from && from.entry.status !== "pending" && !cache.has(to)) {
+        remember(to, { entry: from.entry, gen: from.gen });
+        if (from.entry.view) recordCopy(message, from.entry.view);
+    }
 }
 
 /** Flux MESSAGE_CREATE, also for optimistic copies of messages we are sending. */
@@ -346,7 +354,8 @@ export function handleMessageCreate(message: any, optimistic: boolean) {
             prunePending(now);
             const channelId: string = message.channel_id;
             pendingEcho.set(nonce, {
-                mustBeEncrypted: isChannelEncrypted(channelId) || S.oneShot.has(channelId) || parsed.kind === "message",
+                // "Next message only" is used up before this copy exists; a block exactly as we build it shows it.
+                mustBeEncrypted: isChannelEncrypted(channelId) || S.oneShot.has(channelId) || (parsed.kind === "message" && isExactProtocolContent(message.content ?? "", true)),
                 at: now
             });
         } else {

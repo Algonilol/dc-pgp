@@ -95,6 +95,24 @@ describe("Incoming keys: decision", () => {
         assert.equal(contactStatus(data, IDS.bob), "unverified", "the new key is no longer verified");
         assert.equal(data.contacts[IDS.bob].fpr, rsaKey.fpr);
         assert.equal(data.contacts[IDS.bob].history[0].fpr, bobKey.fpr);
+        assert.equal(data.contacts[IDS.bob].history[0].replacedAt, T, "the key message is older than the stored key: dated by the acceptance");
+    });
+
+    it("a key change is dated by Discord's time of the announcement; a key used again starts afresh", async () => {
+        const { data, bobKey, rsaKey } = await setup();
+        const day = 86_400_000;
+        const idAt = (ms: number) => String((BigInt(ms) - 1_420_070_400_000n) << 22n);
+        applyAccept(data, IDS.bob, "Bob", bobKey, MSG, T);
+
+        applyChangeLater(data, IDS.bob, rsaKey, idAt(T + day), T + day + 5000);
+        acceptPendingKey(data, IDS.bob, T + 3 * day);
+        assert.deepEqual(data.contacts[IDS.bob].history.map(h => [h.fpr, h.replacedAt]), [[bobKey.fpr, T + day]], "announced on day 1, accepted on day 3");
+
+        applyAccept(data, IDS.bob, "Bob", bobKey, idAt(T + 4 * day), T + 4 * day);
+        assert.deepEqual(data.contacts[IDS.bob].history.map(h => [h.fpr, h.replacedAt]), [[rsaKey.fpr, T + 4 * day]], "the current key is not in the history");
+
+        applyAccept(data, IDS.bob, "Bob", rsaKey, idAt(T + 5 * day), T + 5 * day);
+        assert.deepEqual(data.contacts[IDS.bob].history.map(h => [h.fpr, h.replacedAt]), [[bobKey.fpr, T + 5 * day]], "no stale entry from day 1");
     });
 
     it("rejects our own key and someone else's key under another name", async () => {

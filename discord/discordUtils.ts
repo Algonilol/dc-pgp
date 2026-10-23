@@ -15,18 +15,23 @@ const PremiumUtils = findByPropsLazy("canUseIncreasedMessageLength");
 /** Discord's own permission calculation, for any member: ({ user, context }) => permission bits. */
 const computePermissions: (o: { user: string; context: Channel; }) => unknown = findByCodeLazy("\"string\"==typeof", ".computeLurkerPermissionsAllowList()", "isViewingRoles");
 
-let permissionsUnavailable = false;
+const PERMISSION_RETRY_MS = 60_000;
+/** When Discord's permission calculation last failed; after a minute it is tried again. */
+let permissionsFailedAt: number | null = null;
 
-/** Whether a member can open a server channel; null once Discord's calculation is gone (after an update). */
+const permissionsUnavailable = () => permissionsFailedAt != null && Date.now() - permissionsFailedAt < PERMISSION_RETRY_MS;
+
+/** Whether a member can open a server channel; null while Discord's calculation fails (after an update?). */
 function canSeeChannel(userId: string, channel: Channel): boolean | null {
-    if (permissionsUnavailable) return null;
+    if (permissionsUnavailable()) return null;
     try {
         const permissions = computePermissions({ user: userId, context: channel });
         if (typeof permissions !== "bigint") throw new Error("Unexpected permission value: " + typeof permissions);
+        permissionsFailedAt = null;
         return (permissions & PermissionsBits.VIEW_CHANNEL) === PermissionsBits.VIEW_CHANNEL;
     } catch (e) {
-        permissionsUnavailable = true;
-        logger.error("Channel permissions cannot be checked – encryption in server channels is paused", e);
+        if (permissionsFailedAt == null) logger.error("Channel permissions cannot be checked – encryption in server channels is paused", e);
+        permissionsFailedAt = Date.now();
         return null;
     }
 }
@@ -113,18 +118,17 @@ export function planForChannel(channel: Channel | null | undefined): ChannelPlan
         const guildId = channel.getGuildId();
         ensureContactsLoaded(guildId);
         const target = defaultTarget(S.session.data.channels[channel.id]);
-        if (target.kind === "members") {
-            candidates = target.userIds.map(id => candidate(id, guildId));
-        } else {
-            const inTarget = (id: string) => target.kind === "role"
+        const ids = target.kind === "members" ? target.userIds
+            : Object.keys(S.session.data.contacts).filter(id => target.kind === "role"
                 ? GuildMemberStore.getMember(guildId, id)?.roles?.includes(target.roleId)
-                : GuildMemberStore.isMember(guildId, id);
-            // Only contacts who can open this channel: a private channel is not encrypted for the whole server.
-            const visible = Object.keys(S.session.data.contacts).filter(id => inTarget(id) && canSeeChannel(id, channel) !== false);
-            // Unknown viewers: rather send nothing than encrypt for everyone on the server.
-            if (permissionsUnavailable) return { kind, readers: [], missing: [], visibilityUnknown: true };
-            candidates = visible.map(id => candidate(id, guildId));
-        }
+                : GuildMemberStore.isMember(guildId, id));
+        // A thread counts by its channel: Discord's calculation shuts everyone but us out of a private thread.
+        const context = channel.isThread?.() ? ChannelStore.getChannel(channel.parent_id) : channel;
+        // Only people who can open the channel: a private channel is not encrypted for the whole server.
+        const visible = context ? ids.filter(id => canSeeChannel(id, context) !== false) : [];
+        // Unknown viewers: rather send nothing than encrypt for everyone on the server.
+        if (!context || permissionsUnavailable()) return { kind, readers: [], missing: [], visibilityUnknown: true };
+        candidates = visible.map(id => candidate(id, guildId));
     }
 
     const plan = planRecipients(candidates, S.session.data.blocked, me);

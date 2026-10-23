@@ -7,7 +7,10 @@ import { fromUtf8, randomUrlSafe, utf8, utf8Length } from "./bytes";
 
 export const PROTOCOL = "dcpgp/1";
 
-/** Parsing only looks for "dcpgp/1" (and "keyreq"/"keyresp") in the first line, so the wording may change freely. */
+/**
+ * Parsing only looks for "dcpgp/1" (and "keyreq"/"keyresp") in the first line, so other clients may word it
+ * differently. The send brake, though, only lets out content exactly as this version builds it (core/guard.ts).
+ */
 export const MESSAGE_HINT = "-# 🔒 Encrypted message · dcpgp/1";
 export const KEYREQ_HINT = "-# 🔑 Key request · dcpgp/1 keyreq";
 export const KEYRESP_HINT = "-# 🔑 Key response · dcpgp/1 keyresp";
@@ -129,6 +132,11 @@ const DISCORD_EPOCH = 1420070400000n;
 
 export function snowflakeToMs(id: string): number {
     return Number((BigInt(id) >> 22n) + DISCORD_EPOCH);
+}
+
+/** Discord's (server) time of a message id, or null if it is not a snowflake. */
+export function snowflakeTime(id: string | null | undefined): number | null {
+    return id && SNOWFLAKE.test(id) ? snowflakeToMs(id) : null;
 }
 
 export type FindingLevel = "error" | "warning" | "info";
