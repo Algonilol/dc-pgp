@@ -127,8 +127,9 @@ export function checkUploadsForSend(uploads: UploadForSend[], readers: string): 
     if (uploads.length > MAX_ATTACHMENTS) return { error: `At most ${MAX_ATTACHMENTS} files per message.` };
     const ids: string[] = [];
     for (const u of uploads) {
-        if (!u.encrypted) return { error: "An attachment was added before the chat was encrypted, so Discord has it unencrypted. Remove it." };
-        if (u.encrypted.readers !== readers) return { error: "The keys in this chat changed after you attached the files. Remove them and attach them again." };
+        // Toasts are cut after a line or two: what to do comes first.
+        if (!u.encrypted) return { error: "Remove the file and attach it again – it was added before this chat was encrypted, so Discord has it unencrypted." };
+        if (u.encrypted.readers !== readers) return { error: "Remove the files and attach them again – the keys in this chat changed after you attached them." };
         ids.push(u.encrypted.id);
     }
     return { ids };

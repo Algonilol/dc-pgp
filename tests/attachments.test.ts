@@ -78,8 +78,8 @@ describe("Encrypted attachments: decisions", () => {
         const readers = readersKey([{ userId: "2", fpr: "B" }, { userId: "1", fpr: "A" }]);
         assert.equal(readers, readersKey([{ userId: "1", fpr: "A" }, { userId: "2", fpr: "B" }]), "order does not matter");
         assert.deepEqual(checkUploadsForSend([{ encrypted: { id: "x", readers } }, { encrypted: { id: "y", readers } }], readers), { ids: ["x", "y"] });
-        assert.match((checkUploadsForSend([{ encrypted: { id: "x", readers } }, {}], readers) as any).error, /before the chat was encrypted/);
-        assert.match((checkUploadsForSend([{ encrypted: { id: "x", readers: "old" } }], readers) as any).error, /keys in this chat changed/);
+        assert.match((checkUploadsForSend([{ encrypted: { id: "x", readers } }, {}], readers) as any).error, /^Remove the file and attach it again – it was added before this chat was encrypted/);
+        assert.match((checkUploadsForSend([{ encrypted: { id: "x", readers: "old" } }], readers) as any).error, /^Remove the files and attach them again – the keys in this chat changed/);
         assert.deepEqual(checkUploadsForSend([], readers), { ids: [] });
     });
 
