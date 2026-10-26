@@ -330,6 +330,14 @@ await step("A file without text arrives too", async () => {
     const sent = await W.chatSend(W.DM_ID, "", _handlePreSend);
     check(sent && parseContent(sent.content).kind === "message", "no signed message for the file");
     await as(W.ALICE);
+    // On unlock a message can be decrypted a moment before the sender's key is stored: its file is refused
+    // then, and must open once the message's signature is checked.
+    const m = W.clientMessages().get(sent.id);
+    const parsed = parseContent(m.content);
+    const entry = parsed.kind === "message" ? await whenDecrypted(m, parsed.armored) : null;
+    if (!entry?.view) throw new Error("not decrypted");
+    const early = await openAttachment(m, { ...entry.view, signerFpr: undefined }, m.attachments[0], true);
+    check(early.status === "error", "a file opened without a checked signer");
     const r = await read(sent.id);
     check(r.text === "" && r.files.length === 1 && r.files[0].name === "notizen.txt" && !r.fileNotes.length, `${r.files.map(f => f.name)} ${r.fileErrors} ${r.fileNotes}`);
 });

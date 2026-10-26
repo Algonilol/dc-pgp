@@ -159,11 +159,16 @@ export type OpenedFile =
 const opened = new Map<string, Promise<OpenedFile>>();
 const urls = new Set<string>();
 
-const cacheKey = (messageId: string, a: DiscordAttachment, contentId: string) => `${messageId}:${a.id}:${contentId}`;
+/**
+ * Includes what the message's check says about its signer: on unlock a message can be decrypted before the
+ * sender's key is stored, and once it is, the same content comes back checked – its files must be tried again.
+ */
+const cacheKey = (messageId: string, a: DiscordAttachment, view: DecryptedView) =>
+    `${messageId}:${a.id}:${view.contentId}:${view.signerFpr ?? ""}:${view.trust === "failed" ? "failed" : ""}`;
 
 /** Downloads, checks and decrypts one encrypted file of a decrypted message. */
 export function openAttachment(message: { id: string; channel_id: string; author?: { id: string; }; }, view: DecryptedView, a: DiscordAttachment, force = false): Promise<OpenedFile> {
-    const key = cacheKey(message.id, a, view.contentId);
+    const key = cacheKey(message.id, a, view);
     const cached = opened.get(key);
     if (cached) return cached;
     if (!force && a.size > AUTO_OPEN_BYTES) return Promise.resolve({ status: "large", size: a.size });

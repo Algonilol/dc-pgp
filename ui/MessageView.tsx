@@ -137,7 +137,7 @@ function FileView({ message, view, attachment, blur }: { message: AccessoryMessa
         setFile(null);
         openAttachment(message, view, attachment, force).then(f => { if (alive) setFile(f); });
         return () => { alive = false; };
-    }, [message.id, attachment.id, view.contentId, force]);
+    }, [message.id, attachment.id, view.contentId, view.signerFpr, view.trust === "failed", force]);
 
     if (!file) return <Note text="Decrypting file …" />;
     if (file.status === "error") return <div className="dcpgp-alert">⚠ {file.message}</div>;
