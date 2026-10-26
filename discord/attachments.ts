@@ -149,7 +149,8 @@ export interface DiscordAttachment {
 }
 
 export type OpenedFile =
-    | { status: "ok"; name: string; size: number; kind: PreviewKind; url: string; blob: Blob; }
+    /** `note`: the file's own signature did not check out (the signed message still vouches for the file). */
+    | { status: "ok"; name: string; size: number; kind: PreviewKind; url: string; blob: Blob; note?: string; }
     | { status: "error"; message: string; }
     /** Large: opened only on request. */
     | { status: "large"; size: number; };
@@ -171,6 +172,9 @@ export function openAttachment(message: { id: string; channel_id: string; author
         try {
             const authorId = message.author?.id;
             if (!session || !authorId) return { status: "error", message: "DcPgp is locked." };
+            // The message's signature vouches for its files: without a checked signer, none is opened.
+            if (!view.signerFpr || view.trust === "failed")
+                return { status: "error", message: "The message's signature could not be checked, so its files are not opened." };
             const bytes = new Uint8Array(await Native.fetchAttachment(a.url));
             if (!view.meta?.attachments?.includes(await attachmentId(bytes)))
                 return { status: "error", message: "This file is not one the message was signed with. It was swapped or added later." };
@@ -179,15 +183,21 @@ export function openAttachment(message: { id: string; channel_id: string; author
                 ? keys.ownPublic.map(k => k.key)
                 : keys.author ? [keys.author.current.key, ...keys.author.history.map(h => h.key)] : [];
             const result = await decryptFileVerified(bytes, keys.decryptionKeys, verification);
-            if (result.signature.status !== "valid" || result.signature.signerFingerprint !== view.signerFpr)
-                return { status: "error", message: "The file's signature does not match its message." };
             if (S.session !== session) return { status: "error", message: "DcPgp was locked." };
+            // The signed list already binds exactly this file to the message; the file's own signature is a second check.
+            const sig = result.signature;
+            let note: string | undefined;
+            if (sig.status !== "valid" || sig.signerFingerprint !== view.signerFpr) {
+                const why = sig.status !== "valid" ? `${sig.status}${sig.error ? ": " + sig.error : ""}` : "made by another key";
+                logger.warn("File signature check: " + JSON.stringify({ file: a.id, status: sig.status, keyId: sig.keyId, signer: sig.signerFingerprint, expected: view.signerFpr, created: sig.created, error: sig.error }));
+                note = `The file's own signature didn't check out (${why.slice(0, 140)}). The signed message vouches for it.`;
+            }
             const name = safeFileName(result.filename);
             const preview = previewOf(name);
             const blob = new Blob([result.data as Uint8Array<ArrayBuffer>], { type: preview.mime });
             const url = URL.createObjectURL(blob);
             urls.add(url);
-            return { status: "ok", name, size: result.data.length, kind: preview.kind, url, blob };
+            return { status: "ok", name, size: result.data.length, kind: preview.kind, url, blob, ...(note ? { note } : {}) };
         } catch (e) {
             logger.warn("Opening an attachment failed", a.id, (e as Error)?.message);
             return { status: "error", message: "This encrypted file could not be opened (damaged or not for you)." };

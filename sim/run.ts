@@ -113,6 +113,8 @@ interface Seen {
     edited: boolean;
     files: { name: string; kind: string; bytes: Uint8Array; }[];
     fileErrors: string[];
+    /** Warnings shown with an opened file (its own signature did not check out). */
+    fileNotes: string[];
 }
 
 /** What the active account sees for a message, from the same functions the message view uses. */
@@ -128,12 +130,15 @@ async function read(messageId: string): Promise<Seen> {
     const view = repeated ? markRepeated(entry.view) : entry.view;
     const files: Seen["files"] = [];
     const fileErrors: string[] = [];
+    const fileNotes: string[] = [];
     for (const a of (m.attachments as any[]).filter(x => isEncryptedFileName(x.filename))) {
         const f = await openAttachment(m, view, a, true);
-        if (f.status === "ok") files.push({ name: f.name, kind: f.kind, bytes: new Uint8Array(await f.blob.arrayBuffer()) });
-        else fileErrors.push(f.status === "error" ? f.message : f.status);
+        if (f.status === "ok") {
+            files.push({ name: f.name, kind: f.kind, bytes: new Uint8Array(await f.blob.arrayBuffer()) });
+            if (f.note) fileNotes.push(f.note);
+        } else fileErrors.push(f.status === "error" ? f.message : f.status);
     }
-    return { text: view.text, trust: view.trust, findings: view.findings.map(f => f.code), repeated, edited: !!m.editedTimestamp, files, fileErrors };
+    return { text: view.text, trust: view.trust, findings: view.findings.map(f => f.code), repeated, edited: !!m.editedTimestamp, files, fileErrors, fileNotes };
 }
 
 async function openEditBox(messageId: string) {
@@ -311,7 +316,7 @@ await step("Alice sends them with a text; the signed message lists them", async 
 await step("Bob opens both: same names, same bytes, the photo as a picture", async () => {
     await as(W.BOB);
     const r = await read(withFiles);
-    check(!r.fileErrors.length, `errors: ${r.fileErrors}`);
+    check(!r.fileErrors.length && !r.fileNotes.length, `errors: ${r.fileErrors} notes: ${r.fileNotes}`);
     const shownPhoto = r.files.find(f => f.name === "urlaub-am-meer.png");
     const shownPdf = r.files.find(f => f.name === "vertrag.pdf");
     check(shownPhoto && shownPhoto.kind === "image" && sameBytes(shownPhoto.bytes, photo), "the photo differs");
@@ -326,7 +331,7 @@ await step("A file without text arrives too", async () => {
     check(sent && parseContent(sent.content).kind === "message", "no signed message for the file");
     await as(W.ALICE);
     const r = await read(sent.id);
-    check(r.text === "" && r.files.length === 1 && r.files[0].name === "notizen.txt", `${r.files.map(f => f.name)} ${r.fileErrors}`);
+    check(r.text === "" && r.files.length === 1 && r.files[0].name === "notizen.txt" && !r.fileNotes.length, `${r.files.map(f => f.name)} ${r.fileErrors} ${r.fileNotes}`);
 });
 
 section("Attacks by Discord");

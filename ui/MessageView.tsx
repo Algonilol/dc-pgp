@@ -167,6 +167,7 @@ function FileView({ message, view, attachment, blur }: { message: AccessoryMessa
                 <span className="dcpgp-file-meta">{formatSize(file.size)} · end-to-end encrypted</span>
                 <TextButton variant="link" onClick={save}>Save …</TextButton>
             </div>
+            {file.note && <div className="dcpgp-warning">⚠ {file.note}</div>}
         </>
     );
 }
