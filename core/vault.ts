@@ -24,6 +24,13 @@ export interface SlotB {
     pgp: string;
 }
 
+/** "Unlock with Windows": the data key under a key derived from the device key alone – no password. */
+export interface SlotW {
+    salt: string;
+    iv: string;
+    ct: string;
+}
+
 export interface VaultHeader {
     v: 1;
     mode: VaultMode;
@@ -32,6 +39,8 @@ export interface VaultHeader {
     created: number;
     a?: SlotA;
     b: SlotB;
+    /** Only in "Stored" mode, next to slot A. */
+    w?: SlotW;
 }
 
 export interface VaultFile extends VaultHeader {
@@ -42,6 +51,16 @@ export interface VaultFile extends VaultHeader {
 
 /** Combines the Argon2 output with the device secret; implemented in the native (main process) part. */
 export type DeviceMixer = (argonOutput: Uint8Array, salt: Uint8Array) => Promise<Uint8Array>;
+
+/** Derives slot W's key from the device secret alone; implemented in the native part. */
+export type WindowsKeyDeriver = (salt: Uint8Array) => Promise<Uint8Array>;
+
+export class WindowsUnlockError extends Error {
+    constructor() {
+        super("Windows could not unlock DcPgp (the device key changed?). Unlock with your password.");
+        this.name = "WindowsUnlockError";
+    }
+}
 
 export class WrongPasswordError extends Error {
     constructor() {
@@ -59,6 +78,7 @@ export class VaultCorruptError extends Error {
 
 const SLOT_A_INFO_NO_DEVICE = "dcpgp vault slotA v1 (no device)";
 const SLOT_A_AAD = "dcpgp vault slotA v1";
+const SLOT_W_AAD = "dcpgp vault slotW v1";
 
 function payloadAad(h: Pick<VaultHeader, "v" | "mode" | "owner" | "ownFpr">): Uint8Array {
     return utf8(`dcpgp vault payload|${h.v}|${h.mode}|${h.owner}|${h.ownFpr}`);
@@ -120,6 +140,21 @@ export async function makeSlotB(rawDek: Uint8Array, ownKeys: PublicKey[]): Promi
     return { pgp: await encryptToKeys(rawDek, ownKeys) };
 }
 
+async function windowsSlotKey(salt: Uint8Array, derive: WindowsKeyDeriver): Promise<CryptoKey> {
+    const kek = await derive(salt);
+    try {
+        return await aesKey(kek, ["encrypt", "decrypt"]);
+    } finally {
+        kek.fill(0);
+    }
+}
+
+export async function makeSlotW(rawDek: Uint8Array, derive: WindowsKeyDeriver): Promise<SlotW> {
+    const salt = randomBytes(16);
+    const { iv, ct } = await aesEncrypt(await windowsSlotKey(salt, derive), rawDek, utf8(SLOT_W_AAD));
+    return { salt: toBase64(salt), iv, ct };
+}
+
 export interface OpenVault {
     dek: CryptoKey;
     data: VaultData;
@@ -150,7 +185,8 @@ export function validateVaultFile(raw: unknown): VaultFile {
         && typeof f.owner === "string" && typeof f.ownFpr === "string"
         && typeof f.iv === "string" && typeof f.ct === "string"
         && f.b && typeof f.b.pgp === "string"
-        && (f.a == null || (typeof f.a.iv === "string" && typeof f.a.ct === "string" && f.a.kdf?.alg === "argon2id" && typeof f.a.kdf.salt === "string"));
+        && (f.a == null || (typeof f.a.iv === "string" && typeof f.a.ct === "string" && f.a.kdf?.alg === "argon2id" && typeof f.a.kdf.salt === "string"))
+        && (f.w == null || (f.mode === "stored" && typeof f.w.salt === "string" && typeof f.w.iv === "string" && typeof f.w.ct === "string"));
     if (!ok) throw new VaultCorruptError("unknown file format");
     return f;
 }
@@ -163,6 +199,23 @@ export async function openWithPassword(file: VaultFile, password: string, argon2
         rawDek = await aesDecrypt(key, file.a.iv, file.a.ct, utf8(SLOT_A_AAD));
     } catch {
         throw new WrongPasswordError();
+    }
+    try {
+        return await openPayload(file, rawDek);
+    } finally {
+        rawDek.fill(0);
+    }
+}
+
+/** "Unlock with Windows": opens the vault through slot W, without a password. */
+export async function openWithWindows(file: VaultFile, derive: WindowsKeyDeriver): Promise<OpenVault> {
+    if (!file.w) throw new Error("Unlocking with Windows is not switched on.");
+    const key = await windowsSlotKey(fromBase64(file.w.salt), derive);
+    let rawDek: Uint8Array;
+    try {
+        rawDek = await aesDecrypt(key, file.w.iv, file.w.ct, utf8(SLOT_W_AAD));
+    } catch {
+        throw new WindowsUnlockError();
     }
     try {
         return await openPayload(file, rawDek);
@@ -195,6 +248,7 @@ export async function sealVault(header: VaultHeader, dek: CryptoKey, data: Vault
         created: header.created,
         ...(header.a ? { a: header.a } : {}),
         b: header.b,
+        ...(header.w ? { w: header.w } : {}),
         updated: Date.now(),
         iv,
         ct
@@ -210,18 +264,23 @@ export interface CreateVaultOptions {
     params?: Argon2Params;
     argon2?: Argon2Fn;
     mixer?: DeviceMixer | null;
+    /** "Unlock with Windows" ("Stored" mode only). */
+    windows?: WindowsKeyDeriver | null;
 }
 
 export async function createVault(o: CreateVaultOptions): Promise<{ file: VaultFile; dek: CryptoKey; }> {
     const rawDek = randomBytes(32);
     try {
         let a: SlotA | undefined;
+        let w: SlotW | undefined;
         if (o.mode === "stored") {
             if (!o.password || !o.params || !o.argon2) throw new Error("The \"Stored\" mode needs a password.");
             a = await makeSlotA(rawDek, o.password, o.params, o.argon2, o.mixer ?? null);
+            // After slot A: making it creates the device key on first use.
+            if (o.windows) w = await makeSlotW(rawDek, o.windows);
         }
         const b = await makeSlotB(rawDek, [o.ownPublicKey]);
-        const header: VaultHeader = { v: 1, mode: o.mode, owner: o.owner, ownFpr: o.data.self.fpr, created: Date.now(), ...(a ? { a } : {}), b };
+        const header: VaultHeader = { v: 1, mode: o.mode, owner: o.owner, ownFpr: o.data.self.fpr, created: Date.now(), ...(a ? { a } : {}), b, ...(w ? { w } : {}) };
         const dek = await aesKey(rawDek, ["encrypt", "decrypt"]);
         const file = await sealVault(header, dek, o.data);
         return { file, dek };
@@ -231,5 +290,5 @@ export async function createVault(o: CreateVaultOptions): Promise<{ file: VaultF
 }
 
 export function headerOf(file: VaultFile): VaultHeader {
-    return { v: file.v, mode: file.mode, owner: file.owner, ownFpr: file.ownFpr, created: file.created, ...(file.a ? { a: file.a } : {}), b: file.b };
+    return { v: file.v, mode: file.mode, owner: file.owner, ownFpr: file.ownFpr, created: file.created, ...(file.a ? { a: file.a } : {}), b: file.b, ...(file.w ? { w: file.w } : {}) };
 }

@@ -10,10 +10,10 @@ import type { RenderModalProps } from "@vencord/discord-types";
 import { Forms, Modal, openModal, TextInput, useState } from "@webpack/common";
 import type { KeyboardEvent } from "react";
 
-import { readKeyFile, unlockVault } from "../discord/actions";
-import { S } from "../discord/state";
+import { readKeyFile, unlockVault, unlockWithWindows } from "../discord/actions";
+import { logger, S } from "../discord/state";
 import { ErrorText, errorText, Gap, shortName } from "./common";
-import { toastSuccess } from "./dialogs";
+import { toastError, toastSuccess } from "./dialogs";
 import { openChangePasswordModal } from "./vaultFlows";
 
 const KEY_FILE_TYPES = ".asc,.gpg,.key,.pgp,.txt";
@@ -109,4 +109,20 @@ export function openUnlockModal() {
     if (open || S.phase !== "locked") return;
     open = true;
     openModal(props => <UnlockModal {...props} />, { onCloseCallback: () => { open = false; } });
+}
+
+let unlocking = false;
+
+/** Unlocks the way the vault allows: through Windows if that is on – no dialog –, otherwise with the dialog. */
+export function requestUnlock() {
+    if (S.phase !== "locked" || unlocking) return;
+    if (!S.file?.w) return openUnlockModal();
+    unlocking = true;
+    unlockWithWindows()
+        .catch(e => {
+            logger.warn("Unlocking with Windows failed", e);
+            toastError(errorText(e));
+            openUnlockModal();
+        })
+        .finally(() => { unlocking = false; });
 }

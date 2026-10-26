@@ -12,8 +12,8 @@ import { lockVault } from "../discord/actions";
 import { useDcPgpState } from "../discord/state";
 import { COLORS, Gap, mono } from "./common";
 import { openSetupModal } from "./SetupModal";
-import { openUnlockModal } from "./UnlockModal";
-import { openBackupExport, openChangePasswordModal, openKeyFileExport, openModeSwitch, openShowPrivateKey, startBackupImport } from "./vaultFlows";
+import { requestUnlock } from "./UnlockModal";
+import { openBackupExport, openChangePasswordModal, openKeyFileExport, openModeSwitch, openShowPrivateKey, openWindowsUnlockSwitch, startBackupImport } from "./vaultFlows";
 
 const PHASE_TEXT = {
     loading: "Loading …",
@@ -33,6 +33,7 @@ export function SettingsPanel() {
             <Paragraph>
                 Status: <b>{PHASE_TEXT[s.phase]}</b>
                 {mode && ` · Mode: ${mode === "stored" ? "Stored" : "RAM only"}`}
+                {s.file?.w && " · unlocks with Windows"}
                 {session && ` · ${Object.keys(session.data.contacts).length} contacts`}
             </Paragraph>
             {(session || s.file) && (
@@ -44,11 +45,16 @@ export function SettingsPanel() {
             <Gap />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {s.phase === "nosetup" && <Button onClick={openSetupModal}>Set up</Button>}
-                {s.phase === "locked" && <Button onClick={openUnlockModal}>Unlock</Button>}
+                {s.phase === "locked" && <Button onClick={requestUnlock}>Unlock</Button>}
                 {s.phase === "unlocked" && (
                     <>
                         <Button variant="secondary" onClick={() => lockVault("manually")}>Lock now</Button>
                         {mode === "stored" && <Button variant="secondary" onClick={() => openChangePasswordModal()}>Change password</Button>}
+                        {mode === "stored" && (
+                            <Button variant="secondary" onClick={() => void openWindowsUnlockSwitch()}>
+                                {s.file?.w ? "Stop unlocking with Windows …" : "Unlock with Windows …"}
+                            </Button>
+                        )}
                         <Button variant="secondary" onClick={() => openKeyFileExport()}>Save key file</Button>
                         {keyOptions.show && <Button variant="secondary" onClick={openShowPrivateKey}>Show private key …</Button>}
                         {keyOptions.remove && <Button variant="dangerSecondary" onClick={() => void openModeSwitch()}>Remove stored private key …</Button>}

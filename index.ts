@@ -9,6 +9,7 @@ import { UserStore } from "@webpack/common";
 
 import { startAutolock, stopAutolock } from "./discord/autolock";
 import { handleMessageCreate, handleMessageUpdate, startDecryption, stopDecryption } from "./discord/decrypt";
+import { installEditProtection, uninstallEditProtection } from "./discord/edits";
 import { startHiding, stopHiding } from "./discord/hide";
 import { onMessageCreate, startKeyExchange, stopKeyExchange } from "./discord/keyExchange";
 import { installSendProtection, uninstallSendProtection } from "./discord/sendHooks";
@@ -18,7 +19,7 @@ import { ChatLockButton } from "./ui/ChatLockButton";
 import { LockIcon } from "./ui/icons";
 import { renderMessageAccessory } from "./ui/MessageView";
 import { SettingsPanel } from "./ui/SettingsPanel";
-import { openUnlockModal } from "./ui/UnlockModal";
+import { requestUnlock } from "./ui/UnlockModal";
 import { userContextPatch } from "./ui/userMenu";
 
 const ACCESSORY_ID = "dcpgp-message";
@@ -26,13 +27,15 @@ const ACCESSORY_ID = "dcpgp-message";
 let unlockPrompted = false;
 
 function protect() {
-    for (const problem of installSendProtection()) logger.warn(problem);
+    for (const problem of [...installSendProtection(), ...installEditProtection()]) logger.warn(problem);
 }
 
 function maybePromptUnlock() {
-    if (unlockPrompted || S.phase !== "locked" || !settings.store.askUnlockOnStart) return;
+    if (unlockPrompted || S.phase !== "locked") return;
+    // "Unlock with Windows": nothing to ask, DcPgp opens by itself.
+    if (!S.file?.w && !settings.store.askUnlockOnStart) return;
     unlockPrompted = true;
-    openUnlockModal();
+    requestUnlock();
 }
 
 function loadCurrentUser() {
@@ -102,6 +105,7 @@ export default definePlugin({
 
     stop() {
         stopAutolock();
+        uninstallEditProtection();
         uninstallSendProtection();
         removeMessageAccessory(ACCESSORY_ID);
         stopDecryption();

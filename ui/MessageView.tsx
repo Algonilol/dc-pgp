@@ -6,7 +6,7 @@
 
 import { Button, TextButton } from "@components/Button";
 import { find } from "@webpack";
-import { ChannelStore, Parser, Tooltip, useEffect, useLayoutEffect, useState } from "@webpack/common";
+import { ChannelStore, EditMessageStore, Parser, Tooltip, useEffect, useLayoutEffect, useState, useStateFromStores } from "@webpack/common";
 import type { ReactNode } from "react";
 
 import { canViewRawPgp, effectiveAutoDecrypt, hidesOriginal, messageDisplay, type PlaceholderReason, shouldMarkUnencrypted } from "../core/display";
@@ -23,7 +23,7 @@ import { settings } from "../settings";
 import { LockIcon } from "./icons";
 import { openRawCiphertextModal, RawCiphertextView } from "./RawCiphertextView";
 import { openSetupModal } from "./SetupModal";
-import { openUnlockModal } from "./UnlockModal";
+import { requestUnlock } from "./UnlockModal";
 
 interface AccessoryMessage extends MessageLike {
     type?: number;
@@ -73,7 +73,7 @@ function Note({ text, children }: { text: string; children?: ReactNode; }) {
 function Placeholder({ reason, messageId, onViewRaw }: { reason: PlaceholderReason; messageId: string; onViewRaw?: () => void; }) {
     return (
         <Note text={PLACEHOLDER_TEXT[reason]}>
-            {reason === "locked" && <TextButton variant="link" onClick={() => openUnlockModal()}>Unlock</TextButton>}
+            {reason === "locked" && <TextButton variant="link" onClick={() => requestUnlock()}>Unlock</TextButton>}
             {onViewRaw && <TextButton variant="link" onClick={() => onViewRaw()}>View Raw PGP</TextButton>}
             {reason === "nosetup" && <TextButton variant="link" onClick={() => openSetupModal()}>Set up</TextButton>}
             {reason === "manual" && <TextButton variant="link" onClick={() => revealMessage(messageId)}>Decrypt</TextButton>}
@@ -149,7 +149,7 @@ function KeyMessageCard({ message, kind, armoredKey }: { message: AccessoryMessa
     });
 
     function run(id: KeyCardActionId) {
-        if (id === "unlock") return openUnlockModal();
+        if (id === "unlock") return requestUnlock();
         if (id === "setup") return openSetupModal();
         // "review" goes through "accept": a different key always opens the key-change dialog first.
         const work = id === "verify"
@@ -208,6 +208,8 @@ function MessageAccessory({ message }: { message: AccessoryMessage; }) {
     const armored = parsed.kind === "message" ? parsed.armored : null;
     const entry = useDecryption(message, display.kind === "decrypt" ? armored : null);
     const repeated = display.kind === "decrypt" && entry?.status === "ok" && entry.view != null && isRepeatedMessage(message, entry.view);
+    // While the message is being edited, its text is in Discord's edit box: not twice.
+    const editing = useStateFromStores([EditMessageStore], () => EditMessageStore.isEditing(message.channel_id, message.id));
     const viewRaw = armored && canViewRawPgp(display, channelKind(ChannelStore.getChannel(message.channel_id)))
         ? () => openRawCiphertextModal(armored)
         : undefined;
@@ -223,13 +225,13 @@ function MessageAccessory({ message }: { message: AccessoryMessage; }) {
         case "placeholder":
             return <Placeholder reason={display.reason} messageId={message.id} onViewRaw={viewRaw} />;
         case "decrypt":
-            return <Decrypted entry={entry} message={message} blur={opts.blurPlaintext} repeated={repeated} />;
+            return editing ? null : <Decrypted entry={entry} message={message} blur={opts.blurPlaintext} repeated={repeated} />;
         case "key":
             return parsed.kind === "keyreq" || parsed.kind === "keyresp"
                 ? <KeyMessageCard message={message} kind={parsed.kind} armoredKey={parsed.armoredKey} />
                 : null;
         case "raw":
-            return <RawCiphertextView raw={message.content ?? ""} label={PLACEHOLDER_TEXT.locked} onUnlock={() => openUnlockModal()} onViewRaw={viewRaw} />;
+            return <RawCiphertextView raw={message.content ?? ""} label={PLACEHOLDER_TEXT.locked} onUnlock={() => requestUnlock()} onViewRaw={viewRaw} />;
     }
 }
 

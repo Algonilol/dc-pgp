@@ -4,14 +4,16 @@
  */
 
 import assert from "node:assert/strict";
+import { hkdfSync, randomBytes } from "node:crypto";
 import { describe, it } from "node:test";
 
 import { emptyVaultData, normalizeVaultData, pruneVaultData } from "../core/model";
 import { armorKey, fingerprintOf, minimalPublicKey, NotForUsError } from "../core/pgp";
 import {
-    createVault, headerOf, makeSlotA, openWithPassword, openWithPrivateKey, recoverRawDek, sealVault,
-    validateVaultFile, VaultCorruptError, WrongPasswordError
+    createVault, headerOf, makeSlotA, openWithPassword, openWithPrivateKey, openWithWindows, recoverRawDek, sealVault,
+    validateVaultFile, VaultCorruptError, type WindowsKeyDeriver, WindowsUnlockError, WrongPasswordError
 } from "../core/vault";
+import { fileWithHeader, headerForMode } from "../core/vaultOps";
 import { argon2, FAST_PARAMS, gpgKey, IDS, makeMixer } from "./helpers";
 
 async function setup(mode: "stored" | "ram" = "stored") {
@@ -78,6 +80,55 @@ describe("Vault", () => {
         await assert.rejects(openWithPassword(withNewPassword, "correct-password-here", argon2, mixer), WrongPasswordError);
         const reopened = await openWithPassword(withNewPassword, "new-password-quite-long", argon2, mixer);
         assert.equal(reopened.data.channels[IDS.other].encrypt, true);
+    });
+});
+
+/** Like the native part: slot W's key comes from the device key alone. */
+function makeWindows(deviceKey = randomBytes(32)): WindowsKeyDeriver {
+    return async salt => new Uint8Array(hkdfSync("sha256", deviceKey, salt, "dcpgp vault slotW v1", 32));
+}
+
+describe("Unlock with Windows (slot W)", () => {
+    async function setupWindows() {
+        const alice = await gpgKey("alice");
+        const pub = await minimalPublicKey(alice);
+        const data = emptyVaultData({ publicKey: armorKey(pub), fpr: fingerprintOf(alice), createdAt: 1, privateKey: armorKey(alice) });
+        const windows = makeWindows();
+        const { file, dek } = await createVault({ mode: "stored", owner: IDS.alice, ownPublicKey: pub, data, password: "correct-password-here", params: FAST_PARAMS, argon2, mixer: makeMixer(), windows });
+        return { alice, pub, data, windows, file, dek };
+    }
+
+    it("opens without a password on the same PC, not on another one", async () => {
+        const { file, windows } = await setupWindows();
+        const stored = validateVaultFile(JSON.parse(JSON.stringify(file)));
+        const open = await openWithWindows(stored, windows);
+        assert.ok(open.data.self.privateKey?.includes("PRIVATE KEY"));
+        await assert.rejects(openWithWindows(stored, makeWindows()), WindowsUnlockError, "another PC = another device key");
+    });
+
+    it("the password and the key file still open it", async () => {
+        const { file, alice } = await setupWindows();
+        await assert.rejects(openWithPassword(file, "wrong-password-here", argon2, makeMixer()), WrongPasswordError);
+        assert.equal((await openWithPrivateKey(file, alice)).data.self.fpr, fingerprintOf(alice));
+    });
+
+    it("survives saving, and is not possible without it or in \"RAM only\" mode", async () => {
+        const { file, dek, data, windows, pub } = await setupWindows();
+        const saved = await sealVault(headerOf(file), dek, data);
+        assert.deepEqual(saved.w, file.w);
+        await openWithWindows(saved, windows);
+
+        const ram = await createVault({ mode: "ram", owner: IDS.alice, ownPublicKey: pub, data, windows });
+        assert.equal(ram.file.w, undefined);
+        await assert.rejects(openWithWindows(ram.file, windows), /not switched on/);
+        assert.equal(fileWithHeader(file, headerForMode(file, "ram")).w, undefined, "switching to \"RAM only\" drops it");
+        assert.throws(() => validateVaultFile({ ...ram.file, w: file.w }), VaultCorruptError, "slot W only next to a password");
+    });
+
+    it("a changed slot W does not open", async () => {
+        const { file, windows } = await setupWindows();
+        const tampered = { ...file, w: { ...file.w!, ct: file.a!.ct } };
+        await assert.rejects(openWithWindows(tampered, windows), WindowsUnlockError);
     });
 });
 

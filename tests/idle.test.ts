@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { shouldAutoLock, shouldLockOnPowerEvent } from "../core/idle";
+import { shouldAutoLock, shouldLockOnPowerEvent, shouldUnlockOnPowerEvent } from "../core/idle";
 
 describe("Auto-lock after inactivity", () => {
     it("locks once the idle time reaches the setting", () => {
@@ -39,9 +39,21 @@ describe("Locking on screen lock and standby", () => {
             assert.equal(shouldLockOnPowerEvent(event, true, "unlocked"), true, event);
     });
 
-    it("does nothing on the poll timeout, with the setting off, or when not unlocked", () => {
+    it("does nothing on the poll timeout, on unlocking, with the setting off, or when not unlocked", () => {
         assert.equal(shouldLockOnPowerEvent("timeout", true, "unlocked"), false);
+        assert.equal(shouldLockOnPowerEvent("unlock-screen", true, "unlocked"), false);
         assert.equal(shouldLockOnPowerEvent("lock-screen", false, "unlocked"), false);
         assert.equal(shouldLockOnPowerEvent("lock-screen", true, "locked"), false);
+    });
+});
+
+describe("Unlocking with the screen (\"Unlock with Windows\")", () => {
+    it("unlocks again only after its own screen lock, and only with Windows unlock on", () => {
+        assert.equal(shouldUnlockOnPowerEvent("unlock-screen", true, true, "locked"), true);
+        assert.equal(shouldUnlockOnPowerEvent("unlock-screen", false, true, "locked"), false, "locked by hand or after inactivity");
+        assert.equal(shouldUnlockOnPowerEvent("unlock-screen", true, false, "locked"), false, "password mode");
+        assert.equal(shouldUnlockOnPowerEvent("unlock-screen", true, true, "unlocked"), false);
+        assert.equal(shouldUnlockOnPowerEvent("lock-screen", true, true, "locked"), false);
+        assert.equal(shouldUnlockOnPowerEvent("timeout", true, true, "locked"), false);
     });
 });

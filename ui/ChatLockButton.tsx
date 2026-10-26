@@ -22,7 +22,7 @@ import { COLORS } from "./common";
 import { toastInfo } from "./dialogs";
 import { LockIcon } from "./icons";
 import { openSetupModal } from "./SetupModal";
-import { openUnlockModal } from "./UnlockModal";
+import { requestUnlock } from "./UnlockModal";
 
 function menuInput(channel: Channel): ChatMenuInput {
     const kind = channelKind(channel);
@@ -90,7 +90,7 @@ function runEntry(entry: MenuEntry, channel: Channel) {
             openSetupModal();
             return;
         case "unlock":
-            openUnlockModal();
+            requestUnlock();
             return;
         case "lock":
             lockVault("manually");

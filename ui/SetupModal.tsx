@@ -58,6 +58,8 @@ function SetupModal(props: RenderModalProps) {
     const [gpgPassphrase, setGpgPassphrase] = useState("");
     const [prepared, setPrepared] = useState<PreparedKey | null>(null);
     const [mode, setMode] = useState<VaultMode>("stored");
+    /** "Stored", and Windows unlocks it day to day. */
+    const [windowsUnlock, setWindowsUnlock] = useState(false);
     const np = useNewPassword();
     const [savedPath, setSavedPath] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -83,7 +85,8 @@ function SetupModal(props: RenderModalProps) {
             mode,
             password: needs?.password ? np.state.password : undefined,
             generatedPassword: np.state.generated,
-            keyFileSaved: savedPath != null
+            keyFileSaved: savedPath != null,
+            windowsUnlock: mode === "stored" && windowsUnlock
         });
         props.onClose();
         toastSuccess("DcPgp is set up. Now request someone's key via the lock menu in a chat or by right-clicking them.");
@@ -159,8 +162,9 @@ function SetupModal(props: RenderModalProps) {
                 <>
                     {prepared && <KeyReportView report={prepared.report} />}
                     <Gap />
-                    <Choice title="Stored (recommended)" text="Your key is kept encrypted on this PC, protected by your password and the Windows device key. On startup, the password is enough." selected={mode === "stored"} onClick={() => setMode("stored")} />
-                    <Choice title="RAM only" text="Nothing secret on disk. Every time Discord starts, you need the key file and its passphrase." selected={mode === "ram"} onClick={() => setMode("ram")} />
+                    <Choice title="Stored (recommended)" text="Your key is kept encrypted on this PC, protected by your password and the Windows device key. On startup, the password is enough." selected={mode === "stored" && !windowsUnlock} onClick={() => { setMode("stored"); setWindowsUnlock(false); }} />
+                    <Choice title="Unlock with Windows (simplest)" text={"Like \"Stored\", but no password to type: DcPgp opens by itself, protected by your Windows account. Anyone who uses your unlocked Windows account can then read your messages too."} selected={mode === "stored" && windowsUnlock} onClick={() => { setMode("stored"); setWindowsUnlock(true); }} />
+                    <Choice title="RAM only" text="Nothing secret on disk. Every time Discord starts, you need the key file and its passphrase." selected={mode === "ram"} onClick={() => { setMode("ram"); setWindowsUnlock(false); }} />
                 </>
             );
             actions = [back(prepared?.source === "import" ? "import" : "generate"), { text: "Next", variant: "primary", loading: busy, disabled: busy, onClick: afterMode }];
@@ -170,9 +174,11 @@ function SetupModal(props: RenderModalProps) {
             body = (
                 <>
                     <Paragraph>
-                        {mode === "stored"
-                            ? "This password unlocks DcPgp every time Discord starts. It cannot be reset – only recovered with your key file."
-                            : "This password protects your key file. You need it every time Discord starts."}
+                        {mode === "ram"
+                            ? "This password protects your key file. You need it every time Discord starts."
+                            : windowsUnlock
+                                ? "You need this password only rarely: for your key file, to show your private key or to change security settings. Day to day, Windows unlocks DcPgp. It cannot be reset – only recovered with your key file."
+                                : "This password unlocks DcPgp every time Discord starts. It cannot be reset – only recovered with your key file."}
                     </Paragraph>
                     <Gap />
                     <NewPasswordFields np={np} label={mode === "stored" ? "Vault password" : "Password of the key file"} />

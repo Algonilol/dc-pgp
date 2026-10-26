@@ -45,10 +45,11 @@ export function withPrivateKey(data: VaultData, armoredPrivateKey: string): Vaul
 }
 
 export function headerForMode(file: VaultFile, mode: VaultMode, slotA?: SlotA): VaultHeader {
-    const { a: _oldSlot, ...rest } = headerOf(file);
+    const { a: _oldSlot, w: windows, ...rest } = headerOf(file);
+    // "RAM only" keeps no private key, so unlocking with Windows would open nothing: slot W goes too.
     if (mode === "ram") return { ...rest, mode };
     if (!slotA) throw new Error("The \"Stored\" mode needs a password.");
-    return { ...rest, mode, a: slotA };
+    return { ...rest, mode, a: slotA, ...(windows ? { w: windows } : {}) };
 }
 
 /** Replaces the header of a vault file; the payload is re-sealed on the next save anyway. */

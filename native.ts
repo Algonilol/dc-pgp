@@ -72,6 +72,18 @@ export function deriveSlotKey(_: IpcMainInvokeEvent, argonOutput: Uint8Array, sa
     return out;
 }
 
+/**
+ * KEK for "Unlock with Windows" = HKDF(device key): no password, only Windows (DPAPI) protects it.
+ * Never creates a device key – a new one could not open the slot anyway.
+ */
+export function deriveWindowsKey(_: IpcMainInvokeEvent, salt: Uint8Array): Uint8Array {
+    if (!(salt instanceof Uint8Array) || salt.length < 16) throw new Error("invalid input");
+    if (!encryptionAvailable()) throw new Error("DCPGP_DEVICE_UNAVAILABLE");
+    const key = readDeviceKey();
+    if (!key) throw new Error("DCPGP_DEVICE_MISSING");
+    return new Uint8Array(hkdfSync("sha256", key, Buffer.from(salt), "dcpgp vault slotW v1", 32));
+}
+
 /** Key for hashing the ids of encrypted chats, so the mod can recognise them while locked. */
 export function guardKey(_: IpcMainInvokeEvent): Uint8Array {
     const key = getOrCreateDeviceKey();
@@ -94,14 +106,14 @@ export function getIdleState(_: IpcMainInvokeEvent, thresholdSeconds: number): s
     }
 }
 
-type PowerEvent = "lock-screen" | "suspend" | "shutdown" | "timeout";
+type PowerEvent = "lock-screen" | "unlock-screen" | "suspend" | "shutdown" | "timeout";
 let waiters: Array<(e: PowerEvent) => void> = [];
 let subscribed = false;
 
 function subscribePower() {
     if (subscribed) return;
     subscribed = true;
-    for (const ev of ["lock-screen", "suspend", "shutdown"] as const) {
+    for (const ev of ["lock-screen", "unlock-screen", "suspend", "shutdown"] as const) {
         powerMonitor.on(ev as any, () => {
             const current = waiters;
             waiters = [];
@@ -110,7 +122,7 @@ function subscribePower() {
     }
 }
 
-/** Long poll: resolves on screen lock, standby or shutdown, or after the timeout. */
+/** Long poll: resolves on screen lock or unlock, standby or shutdown, or after the timeout. */
 export function waitForPowerEvent(_: IpcMainInvokeEvent, timeoutMs: number): Promise<PowerEvent> {
     subscribePower();
     return new Promise(resolve => {

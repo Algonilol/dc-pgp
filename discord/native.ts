@@ -5,7 +5,7 @@
 
 import type { PluginNative } from "@utils/types";
 
-import type { DeviceMixer } from "../core/vault";
+import type { DeviceMixer, WindowsKeyDeriver } from "../core/vault";
 
 export const Native = VencordNative.pluginHelpers.DcPgp as PluginNative<typeof import("../native")>;
 
@@ -13,6 +13,8 @@ export const nativeMixer: DeviceMixer = async (argonOutput, salt) => {
     const out = await Native.deriveSlotKey(argonOutput, salt);
     return new Uint8Array(out);
 };
+
+export const nativeWindowsKey: WindowsKeyDeriver = async salt => new Uint8Array(await Native.deriveWindowsKey(salt));
 
 export type DeviceStatus = "ok" | "missing" | "unreadable" | "unavailable";
 

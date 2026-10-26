@@ -9,7 +9,7 @@ import { chooseFile } from "@utils/web";
 import type { RenderModalProps } from "@vencord/discord-types";
 import { Modal, openModal, useEffect, useState } from "@webpack/common";
 
-import { changePassword, changeSecurityMode, exportOwnKeyFile, exportVaultBackup, importVaultBackup, revealPrivateKey } from "../discord/actions";
+import { changePassword, changeSecurityMode, exportOwnKeyFile, exportVaultBackup, importVaultBackup, revealPrivateKey, setWindowsUnlock } from "../discord/actions";
 import { copyAndMaybeClear } from "../discord/clipboard";
 import { S, useDcPgpState } from "../discord/state";
 import { settings } from "../settings";
@@ -83,6 +83,29 @@ export async function openModeSwitch() {
         async onSubmit(password, generated) {
             await changeSecurityMode("stored", { password, generated });
             toastSuccess("\"Stored\" mode is active.");
+        }
+    });
+}
+
+export const WINDOWS_UNLOCK_TRADEOFF = "DcPgp then opens by itself when Discord starts and when you unlock Windows, and unlocking it is one click – no password to type. Your Windows account protects your key instead: anyone who uses your unlocked Windows account, and any program running as you (other Discord plugins included), can then read your encrypted messages without a password.";
+
+/** "Unlock with Windows": on after the trade-off was shown, off again; both confirmed with the vault password. */
+export async function openWindowsUnlockSwitch() {
+    const session = S.session;
+    if (!session) return toastError("DcPgp is locked.");
+    const on = !session.file.w;
+    if (on && !await confirmDialog("Unlock with Windows?", `${WINDOWS_UNLOCK_TRADEOFF} Your vault password stays, e.g. for showing your private key.`, "Continue"))
+        return;
+    openPasswordPrompt({
+        title: on ? "Unlock with Windows" : "Stop unlocking with Windows",
+        description: on
+            ? "Enter your vault password to switch it on."
+            : "Enter your vault password. From then on, DcPgp asks for it again when Discord starts.",
+        confirmText: on ? "Switch on" : "Switch off",
+        kind: "existing",
+        async onSubmit(password) {
+            await setWindowsUnlock(on, password);
+            toastSuccess(on ? "DcPgp now unlocks with Windows." : "DcPgp asks for your password again.");
         }
     });
 }

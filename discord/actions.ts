@@ -16,14 +16,14 @@ import {
 } from "../core/pgp";
 import { checkStrength, MIN_BITS, type StrengthResult } from "../core/strength";
 import {
-    createVault, type DeviceMixer, makeSlotA, type OpenVault, openWithPassword, openWithPrivateKey, recoverRawDek,
-    type SlotA, type VaultFile, type VaultMode
+    createVault, type DeviceMixer, headerOf, makeSlotA, makeSlotW, type OpenVault, openWithPassword, openWithPrivateKey, openWithWindows, recoverRawDek,
+    type SlotA, type SlotW, type VaultFile, type VaultMode
 } from "../core/vault";
 import { decodeKeyFile, fileWithHeader, headerForMode, type KeySource, setupNeeds, withoutPrivateKeys, withPrivateKey } from "../core/vaultOps";
 import { toastInfo } from "../ui/dialogs";
 import { argon2 } from "./argon2";
 import { maintainKeys } from "./keyRenewal";
-import { deviceStatus, Native, nativeMixer } from "./native";
+import { deviceStatus, Native, nativeMixer, nativeWindowsKey } from "./native";
 import { forgetSession, logger, rewriteVault, S, saveVault, type Session, storeGuardTags, storeNewVault } from "./state";
 import { dicewareWords } from "./wordlist";
 
@@ -69,6 +69,25 @@ async function mixerForNewSlot(): Promise<DeviceMixer | null> {
 
 async function newSlotA(rawDek: Uint8Array, password: string): Promise<SlotA> {
     return makeSlotA(rawDek, password, await calibrateArgon2(argon2), argon2, await mixerForNewSlot());
+}
+
+/** "Unlock with Windows" needs the device key: only Windows protects the vault then. */
+async function windowsForNewSlot(): Promise<typeof nativeWindowsKey> {
+    const status = await deviceStatus();
+    if (status !== "ok" && status !== "missing") throw new Error("Windows device protection (DPAPI) is not available on this PC, so DcPgp cannot unlock with Windows.");
+    return nativeWindowsKey;
+}
+
+/** The vault password, checked against slot A (also with the device key). */
+async function verifyVaultPassword(file: VaultFile, password: string): Promise<void> {
+    if (file.mode !== "stored" || !file.a) throw new Error("In \"RAM only\" mode there is no vault password.");
+    let mixer: DeviceMixer | null = null;
+    if (file.a.device) {
+        const status = await deviceStatus();
+        if (status !== "ok") throw new DeviceKeyError(status);
+        mixer = nativeMixer;
+    }
+    await openWithPassword(file, password, argon2, mixer);
 }
 
 async function buildSession(file: VaultFile, open: OpenVault, privateKey?: PrivateKey): Promise<Session> {
@@ -135,6 +154,8 @@ export interface SetupInput {
     password?: string;
     generatedPassword?: string | null;
     keyFileSaved: boolean;
+    /** "Stored" mode, and Windows unlocks it day to day. */
+    windowsUnlock?: boolean;
 }
 
 export async function setupVault(i: SetupInput): Promise<void> {
@@ -161,7 +182,10 @@ export async function setupVault(i: SetupInput): Promise<void> {
         ...(stored ? { privateKey: armorKey(key) } : {})
     });
     const { file, dek } = await createVault(stored
-        ? { mode: "stored", owner: uid, ownPublicKey: minimal, data, password: i.password, params: await calibrateArgon2(argon2), argon2, mixer: await mixerForNewSlot() }
+        ? {
+            mode: "stored", owner: uid, ownPublicKey: minimal, data, password: i.password, params: await calibrateArgon2(argon2), argon2,
+            mixer: await mixerForNewSlot(), windows: i.windowsUnlock ? await windowsForNewSlot() : null
+        }
         : { mode: "ram", owner: uid, ownPublicKey: minimal, data });
     if (S.userId !== uid) throw new Error("The Discord account changed. Please set up again.");
     await storeNewVault(file);
@@ -196,6 +220,52 @@ export async function unlockVault(input: UnlockInput): Promise<{ viaKeyFile: boo
     return { viaKeyFile: !("password" in input) };
 }
 
+/** "Unlock with Windows": opens the vault without a password. Throws if that is off or Windows cannot. */
+export async function unlockWithWindows(): Promise<void> {
+    const file = S.file;
+    if (!file?.w) throw new Error("Unlocking with Windows is not switched on.");
+    if (S.session) return;
+    const status = await deviceStatus();
+    if (status !== "ok") throw new DeviceKeyError(status);
+    const session = await buildSession(file, await openWithWindows(file, nativeWindowsKey));
+    if (S.file !== file || S.session) throw new Error("The vault changed in the meantime. Please try again.");
+    activate(session);
+}
+
+/**
+ * Switches "Unlock with Windows" on or off, after the vault password was confirmed. Off creates a fresh
+ * data key, so neither the fallback copy nor any other old copy of the vault opens through Windows.
+ */
+export async function setWindowsUnlock(on: boolean, password: string): Promise<void> {
+    const session = requireSession();
+    if (session.file.mode !== "stored") throw new Error("Unlocking with Windows needs the \"Stored\" mode.");
+    if (!!session.file.w === on) return;
+    await verifyVaultPassword(session.file, password);
+    if (on) {
+        // Slot A already created the device key; without it (no DPAPI at setup), Windows cannot step in now.
+        if ((await deviceStatus()) !== "ok") throw new Error("Windows device protection (DPAPI) is not available on this PC, so DcPgp cannot unlock with Windows.");
+        const windows = nativeWindowsKey;
+        const raw = await recoverRawDek(session.file, session.privateKey);
+        let slot: SlotW;
+        try {
+            slot = await makeSlotW(raw, windows);
+        } finally {
+            raw.fill(0);
+        }
+        if (S.session !== session) throw new Error("DcPgp was locked in the meantime.");
+        session.file = fileWithHeader(session.file, { ...headerOf(session.file), w: slot });
+        return saveVault();
+    }
+    const fresh = await createVault({
+        mode: "stored", owner: session.file.owner, ownPublicKey: session.ownPublic, data: session.data,
+        password, params: await calibrateArgon2(argon2), argon2, mixer: await mixerForNewSlot()
+    });
+    await rewriteVault(session, () => {
+        session.file = fresh.file;
+        session.dek = fresh.dek;
+    });
+}
+
 export function lockVault(reason?: string) {
     if (!S.session) return;
     forgetSession();
@@ -211,7 +281,9 @@ export async function changePassword(newPassword: string, generated?: string | n
     // A fresh data key: the old password – and any old copy of the vault – no longer opens the current one.
     const fresh = await createVault({
         mode: "stored", owner: session.file.owner, ownPublicKey: session.ownPublic, data: session.data,
-        password: newPassword, params: await calibrateArgon2(argon2), argon2, mixer: await mixerForNewSlot()
+        password: newPassword, params: await calibrateArgon2(argon2), argon2, mixer: await mixerForNewSlot(),
+        // "Unlock with Windows" stays as it was.
+        windows: session.file.w ? await windowsForNewSlot() : null
     });
     await rewriteVault(session, () => {
         session.file = fresh.file;
@@ -224,13 +296,7 @@ export async function revealPrivateKey(password: string): Promise<string> {
     const session = requireSession();
     const { file } = session;
     if (file.mode !== "stored" || !file.a) throw new Error("In \"RAM only\" mode your private key is only in your key file.");
-    let mixer: DeviceMixer | null = null;
-    if (file.a.device) {
-        const status = await deviceStatus();
-        if (status !== "ok") throw new DeviceKeyError(status);
-        mixer = nativeMixer;
-    }
-    await openWithPassword(file, password, argon2, mixer);
+    await verifyVaultPassword(file, password);
     if (S.session !== session) throw new Error("DcPgp was locked in the meantime.");
     return armorKey(session.privateKey);
 }

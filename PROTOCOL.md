@@ -26,6 +26,8 @@ The PGP block is an OpenPGP message with:
 
 A receiver rejects armored messages over 64 KiB, more than 100 encrypted session keys and more than 1 MiB of plaintext. A sender encrypts to at most 50 readers and refuses messages that would exceed Discord's length limit (2,000 characters, 4,000 with Nitro).
 
+An **edit** replaces the content with a new message of the same format: encrypted to the chat's readers as they are now, with `t` set to the time of the edit, which receivers compare with Discord's edit timestamp. If the text did not change, nothing is sent. In an encrypted chat, and for an encrypted message anywhere, an edit is never saved unencrypted.
+
 ### Inner plaintext
 
 ```
@@ -116,6 +118,7 @@ The two 30-digit strings are sorted and concatenated: 60 digits, identical on bo
 - The vault content (keys, contacts, chat settings; JSON) is encrypted with a random 256-bit **data key** using AES-256-GCM. The associated data binds version, mode, owner and own fingerprint.
 - **Slot A** (mode *Stored*): the data key, encrypted with `HKDF-SHA256(Argon2id(password) ‖ device key, salt, "dcpgp vault slotA v1")`. Argon2id uses 256 MiB, p = 1, and 3–10 passes calibrated to about one second. The device key is 32 random bytes protected by Electron safeStorage (Windows DPAPI) in Vencord's data folder; it never leaves the main process. Where safeStorage is unavailable, the password alone is used (info `"dcpgp vault slotA v1 (no device)"`).
 - **Slot B**: the data key, OpenPGP-encrypted to the own key, for recovery with the key file.
+- **Slot W** ("Unlock with Windows", optional, *Stored* mode only, next to slot A): the data key, encrypted with `HKDF-SHA256(device key, salt, "dcpgp vault slotW v1")` – no password. The plugin then unlocks on startup, and again when Windows unlocks after DcPgp locked with the screen. Switching it on needs the vault password; switching it off too, and it creates a new data key and replaces the fallback copy, so no older copy opens without the password. Changing the password keeps it; *RAM only* drops it.
 - **RAM only** mode has no slot A and keeps no private key in the vault; unlocking needs the key file. A key file older than the vault is refreshed on unlock with the newer signatures of the vault's copy of the public key.
 - **Previous version**: every save keeps the version before as a fallback copy, used if the current one is damaged. Changing the password creates a new data key and replaces the fallback copy too, so neither the old password nor an old copy opens the vault; removing the stored private key also replaces it.
 - **Vault backup** (`.dcpgp`, JSON): the content encrypted with AES-256-GCM under `HKDF-SHA256(Argon2id(backup password), salt, "dcpgp backup v1")`, header bound as associated data, no device key.

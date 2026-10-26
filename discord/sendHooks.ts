@@ -6,6 +6,7 @@
 
 import { addMessagePreSendListener, type MessageObject, type MessageSendListener, removeMessagePreSendListener, type SendMessageOptions, type SendMessageProps } from "@api/MessageEvents";
 import { plugins } from "@api/PluginManager";
+import type { Channel } from "@vencord/discord-types";
 import { findByProps } from "@webpack";
 import { ChannelStore, DraftStore, MessageStore } from "@webpack/common";
 
@@ -28,7 +29,7 @@ const seenByHook = new WeakSet<object>();
 let active = false;
 let preSendInstalled = false;
 
-function safeToast(text: string) {
+export function safeToast(text: string) {
     try {
         toastError("DcPgp: " + text);
     } catch (e) {
@@ -36,17 +37,25 @@ function safeToast(text: string) {
     }
 }
 
-function cancel(text: string) {
+export function cancel(text: string) {
     safeToast(text);
     return CANCEL;
 }
 
+/** Why a message or edit must not go out; shown to the user. */
+export class Refusal extends Error { }
+
+/** Records what our hook made of a message object: the brake then lets exactly this out. */
+export function expectContent(msg: object, content: string) {
+    expected.set(msg, content);
+}
+
 function missingText(m: { name: string; reason: MissingReason; }): string {
     switch (m.reason) {
-        case "no-key": return `No key of ${m.name} is stored. Message NOT sent.`;
-        case "key-changed": return `${m.name} has a new key that is not confirmed yet. Message NOT sent.`;
-        case "key-expired": return `${m.name}'s key has expired. Request their updated key in the lock menu. Message NOT sent.`;
-        case "blocked": return `${m.name} is blocked. Message NOT sent.`;
+        case "no-key": return `No key of ${m.name} is stored.`;
+        case "key-changed": return `${m.name} has a new key that is not confirmed yet.`;
+        case "key-expired": return `${m.name}'s key has expired. Request their updated key in the lock menu.`;
+        case "blocked": return `${m.name} is blocked.`;
     }
 }
 
@@ -69,29 +78,20 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     });
 }
 
-async function encryptOutgoing(channelId: string, msg: MessageObject, options: SendMessageOptions | undefined, props: SendMessageProps | undefined) {
-    const oneShot = S.oneShot.has(channelId);
-    if (!oneShot && !isChannelEncrypted(channelId)) return;
-
+/**
+ * Encrypts a text for a chat after every check a send needs; throws Refusal when it must not go out.
+ * Shared by sending and editing, so both encrypt for exactly the same readers.
+ */
+export async function encryptForChat(channelId: string, channel: Channel | null | undefined, text: string, time: number, maxLength: number): Promise<string> {
     const session = S.session;
     const me = myId();
-    if (S.phase !== "unlocked" || !session || !me)
-        return cancel("This chat is encrypted, but DcPgp is locked. Message NOT sent.");
-    if (options?.alsoForwardToChannelId)
-        return cancel("\"Also send to channel\" does not work with encrypted messages. Message NOT sent.");
-    if (props?.hasAttachments)
-        return cancel("Attachments are not encrypted yet. Message NOT sent.");
+    if (S.phase !== "unlocked" || !session || !me) throw new Refusal("This chat is encrypted, but DcPgp is locked.");
 
-    const raw = typeof msg.content === "string" ? msg.content : "";
-    const silent = raw.startsWith(SILENT_PREFIX);
-    const text = silent ? raw.slice(SILENT_PREFIX.length) : raw;
-    if (!text.trim()) return;
-
-    const plan = planForChannel(props?.channel ?? ChannelStore.getChannel(channelId));
-    if (plan.unsupported) return cancel("DcPgp cannot encrypt in this type of chat. Message NOT sent.");
-    if (plan.visibilityUnknown) return cancel("DcPgp cannot check who can see this channel (Discord update?). Message NOT sent.");
-    if (plan.kind === "dm" && plan.missing.length) return cancel(missingText(plan.missing[0]));
-    if (!plan.readers.length) return cancel("Nobody in this chat has a stored key. Message NOT sent.");
+    const plan = planForChannel(channel ?? ChannelStore.getChannel(channelId));
+    if (plan.unsupported) throw new Refusal("DcPgp cannot encrypt in this type of chat.");
+    if (plan.visibilityUnknown) throw new Refusal("DcPgp cannot check who can see this channel (Discord update?).");
+    if (plan.kind === "dm" && plan.missing.length) throw new Refusal(missingText(plan.missing[0]));
+    if (!plan.readers.length) throw new Refusal("Nobody in this chat has a stored key.");
 
     const recipients = await Promise.all(plan.readers.map(async r => ({ userId: r.userId, key: await parsedKey(r.contact.publicKey) })));
     let encrypted: string;
@@ -103,14 +103,40 @@ async function encryptOutgoing(channelId: string, msg: MessageObject, options: S
             recipients,
             ownPublic: session.ownPublic,
             signer: session.privateKey,
-            time: intendedTime(options),
-            maxLength: maxMessageLength() - (silent ? SILENT_PREFIX.length : 0)
+            time,
+            maxLength
         }), ENCRYPT_TIMEOUT_MS);
     } catch (e) {
-        if (e instanceof TooLongError) return cancel("Message NOT sent: " + e.message);
+        if (e instanceof TooLongError) throw new Refusal(e.message);
         throw e;
     }
-    if (S.session !== session) return cancel("DcPgp was locked while encrypting. Message NOT sent.");
+    if (S.session !== session) throw new Refusal("DcPgp was locked while encrypting.");
+    return encrypted;
+}
+
+async function encryptOutgoing(channelId: string, msg: MessageObject, options: SendMessageOptions | undefined, props: SendMessageProps | undefined) {
+    const oneShot = S.oneShot.has(channelId);
+    if (!oneShot && !isChannelEncrypted(channelId)) return;
+
+    if (S.phase !== "unlocked" || !S.session || !myId())
+        return cancel("This chat is encrypted, but DcPgp is locked. Message NOT sent.");
+    if (options?.alsoForwardToChannelId)
+        return cancel("\"Also send to channel\" does not work with encrypted messages. Message NOT sent.");
+    if (props?.hasAttachments)
+        return cancel("Attachments are not encrypted yet. Message NOT sent.");
+
+    const raw = typeof msg.content === "string" ? msg.content : "";
+    const silent = raw.startsWith(SILENT_PREFIX);
+    const text = silent ? raw.slice(SILENT_PREFIX.length) : raw;
+    if (!text.trim()) return;
+
+    let encrypted: string;
+    try {
+        encrypted = await encryptForChat(channelId, props?.channel, text, intendedTime(options), maxMessageLength() - (silent ? SILENT_PREFIX.length : 0));
+    } catch (e) {
+        if (e instanceof Refusal) return cancel(`${e.message} Message NOT sent.`);
+        throw e;
+    }
 
     const finalContent = (silent ? SILENT_PREFIX : "") + encrypted;
     msg.content = finalContent;

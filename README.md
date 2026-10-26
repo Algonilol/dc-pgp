@@ -37,8 +37,10 @@ More details: [PROTOCOL.md](PROTOCOL.md) (wire format, key lifetime, vault) · [
 - **Keys that don't run out**: a year before your key expires, DcPgp extends it – same key, same safety number. Your contacts receive the update automatically.
 - **Made for 1:1 DMs**; group DMs and server channels work too: each message is readable for everyone in the chat whose key you have – in a server channel, for those who can see the channel (in a thread: the channel it belongs to).
 - **Signed metadata inside the encryption** (sender, chat, recipients, time) exposes re-posted, forwarded or replayed messages.
+- **Edit encrypted messages** as usual: the edit box shows your plaintext, and saving encrypts the new text again for the same chat. Discord keeps the edit box in memory only, and DcPgp closes it when it locks.
 - **Fail-closed send protection**: in an encrypted chat nothing leaves unencrypted. The plugin is the first pre-send hook, an emergency brake guards Discord's own send and edit functions, drafts of encrypted chats are never written to disk, and a check verifies that your own messages arrive at Discord encrypted.
 - **Local vault** for your key and contacts (AES-256-GCM), unlocked with a password (Argon2id, 256 MiB) and bound to your PC through Windows DPAPI – or "RAM only" mode, where nothing secret is stored and you unlock with your key file.
+- **Unlock with Windows**, if you'd rather not type a password: DcPgp opens by itself when Discord starts and when you unlock Windows, protected by your Windows account. Choose it during setup or in the settings.
 - **Automatic locking** after a period without input and when Windows locks or goes to sleep. Locking discards your key and all decrypted text.
 - **Portable vault backup** to move to another PC.
 - Decrypted text is only rendered in the UI; it never enters Discord's message store.
@@ -98,7 +100,7 @@ Quit Discord completely (also in the system tray) and start it again. DcPgp swit
 
 ## Getting started
 
-1. **Set up** – click the lock icon next to the chat input → *Set up DcPgp*. Generate a new key (recommended) or import one from Kleopatra, choose a mode (*Stored* is recommended), set a password (*Generate* gives you five random words) and save the key file somewhere safe.
+1. **Set up** – click the lock icon next to the chat input → *Set up DcPgp*. Generate a new key (recommended) or import one from Kleopatra, choose a mode (*Stored* is recommended; *Unlock with Windows* if you don't want to type a password each time), set a password (*Generate* gives you five random words) and save the key file somewhere safe.
 2. **Exchange keys** – in a DM: lock menu → *Request ⟨name⟩'s key*. Your contact accepts with one click on the card under your request.
 3. **Verify** – lock menu → *Compare safety number*. Read the 60 digits to each other on a call or compare them in person. When they match, messages from this contact get a green lock.
 4. **Encrypt** – lock menu → *Encrypt everything in this chat*. A green dot on the lock confirms that your next message will be sent encrypted – and if that is not possible, it is not sent.
@@ -125,6 +127,7 @@ Your vault actions (change password, save key file, show or remove the stored pr
 - **Compare safety numbers.** Until you do, a contact's key is trusted on first use – Discord carried it, so Discord could have swapped it.
 - **Your password cannot be reset.** The key file (with its own password) is your only recovery. Keep it offline, e.g. on a USB stick.
 - **The vault is bound to this PC.** The vault password alone does not open it elsewhere, because a device key protected by Windows (DPAPI) is mixed in. To move to another PC, use a vault backup or your key file.
+- **Unlock with Windows is convenient, but weaker.** Your Windows account protects your key instead of a password: anyone who uses your unlocked Windows account, and any program running as you – other Discord plugins included –, can read your encrypted messages without a password. Your vault password stays for showing your private key and for switching this off again; switching it off also gives the vault a new data key, so no old copy opens through Windows.
 - **A vault backup is protected by its password only** (Argon2id, no device key). Choose a strong one.
 - **Showing your private key** asks for the vault password again. Anyone who sees it can read all your messages; to move your key, save the key file instead, which is password-protected.
 - **Key lifetime.** Generated keys are valid for two years. When less than a year is left, DcPgp extends your key the next time you unlock: new self-signatures on the same key, so fingerprint and safety numbers stay. A contact gets the extended key once, right after your next encrypted message in your DM, or when they ask for it. If a contact's key is about to expire, the lock menu offers *Request ⟨name⟩'s updated key*. If you use the same key in Kleopatra, save the key file again and import it there, so Kleopatra knows the new expiry.
@@ -134,7 +137,6 @@ Details: [SECURITY.md](SECURITY.md) (threat model, reporting vulnerabilities) an
 
 ## Known limitations
 
-- **Editing** encrypted messages is not supported yet; edits are blocked in encrypted chats.
 - **Attachments and polls** are not encrypted; they are blocked in encrypted chats.
 - **Mentions** inside an encrypted message don't ping: Discord cannot see them. Reply previews and notifications show only the "Encrypted message" header.
 - **Message length**: about 800 characters of text per message without Nitro, about 2,270 with Nitro (plain text; umlauts and emoji take more). Longer messages are refused instead of being cut off.
