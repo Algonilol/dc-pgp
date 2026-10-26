@@ -69,6 +69,11 @@ const MISSING_REASON: Record<MissingReason, string> = {
     blocked: "blocked"
 };
 
+/** Why someone can't read a message, in a few words. */
+export function missingReasonText(reason: MissingReason): string {
+    return MISSING_REASON[reason];
+}
+
 /** "A, B, C" – long lists end in "and N more", so the menu stays short. */
 function nameList(names: string[], max = 5): string {
     return names.length <= max ? names.join(", ") : `${names.slice(0, max).join(", ")} and ${names.length - max} more`;

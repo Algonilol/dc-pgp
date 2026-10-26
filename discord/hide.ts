@@ -19,10 +19,17 @@ const BASE_CSS = [
     ".dcpgp-tone-ok{border-left-color:var(--status-positive,#23a55a)}",
     ".dcpgp-tone-warning{border-left-color:var(--status-warning,#f0b232)}",
     ".dcpgp-tone-danger{border-left-color:var(--status-danger,#f23f43)}",
-    ".dcpgp-fpr{flex-basis:100%;font-family:var(--font-code,monospace);font-size:.75rem;color:var(--text-muted);overflow-wrap:anywhere;user-select:text}"
+    ".dcpgp-fpr{flex-basis:100%;font-family:var(--font-code,monospace);font-size:.75rem;color:var(--text-muted);overflow-wrap:anywhere;user-select:text}",
+    ".dcpgp-attachments{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:4px}",
+    ".dcpgp-media{display:block;max-width:min(100%,420px);max-height:350px;border-radius:8px;cursor:default}",
+    ".dcpgp-file{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;max-width:min(100%,420px);padding:8px 10px;border-radius:8px;background:var(--background-secondary,rgba(127,127,127,.1));font-size:.875rem;color:var(--text-default,var(--text-normal))}",
+    ".dcpgp-file-name{font-weight:500;overflow-wrap:anywhere}",
+    ".dcpgp-file-meta{font-size:.75rem;color:var(--text-muted)}"
 ].join("");
 
 const hidden = new Map<string, number>();
+/** Messages whose encrypted file cards DcPgp replaces with the decrypted files. */
+const hiddenCards = new Map<string, number>();
 let styleEl: HTMLStyleElement | null = null;
 let scheduled = false;
 let enabled = false;
@@ -39,6 +46,9 @@ function flush() {
         const [channelId, messageId] = key.split(":");
         selectors.push(`#chat-messages-${channelId}-${messageId} #message-content-${messageId}`);
     }
+    // Discord's card for each dcpgp-N.pgp file; never the part that holds DcPgp's own rendering.
+    for (const messageId of hiddenCards.keys())
+        selectors.push(`#message-accessories-${messageId} > :has(a[href*="/dcpgp-"]):not(:has(.dcpgp-attachments))`);
     styleEl.textContent = BASE_CSS + (selectors.length ? `${selectors.join(",")}{display:none!important}` : "");
 }
 
@@ -62,6 +72,19 @@ export function hideOriginalContent(channelId: string, messageId: string): () =>
     };
 }
 
+/** Hides Discord's cards of a message's encrypted files while DcPgp shows them decrypted. */
+export function hideEncryptedFileCards(messageId: string): () => void {
+    if (!ID.test(messageId)) return () => { };
+    hiddenCards.set(messageId, (hiddenCards.get(messageId) ?? 0) + 1);
+    schedule();
+    return () => {
+        const n = (hiddenCards.get(messageId) ?? 1) - 1;
+        if (n <= 0) hiddenCards.delete(messageId);
+        else hiddenCards.set(messageId, n);
+        schedule();
+    };
+}
+
 export function startHiding() {
     enabled = true;
     schedule();
@@ -70,6 +93,7 @@ export function startHiding() {
 export function stopHiding() {
     enabled = false;
     hidden.clear();
+    hiddenCards.clear();
     styleEl?.remove();
     styleEl = null;
 }

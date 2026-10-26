@@ -26,6 +26,8 @@ export interface EncryptRequest {
     signer: PrivateKey;
     time: number;
     maxLength: number;
+    /** Ids of encrypted attachments sent with the message (core/attachments.ts). */
+    attachments?: string[];
 }
 
 export async function encryptForChannel(req: EncryptRequest): Promise<string> {
@@ -33,7 +35,8 @@ export async function encryptForChannel(req: EncryptRequest): Promise<string> {
         sender: req.senderId,
         channel: req.channelId,
         recipients: req.recipients.map(r => r.userId),
-        time: req.time
+        time: req.time,
+        ...(req.attachments?.length ? { attachments: req.attachments } : {})
     });
     const armored = await encryptSigned(inner, [...req.recipients.map(r => r.key), req.ownPublic], req.signer);
     inner.fill(0);

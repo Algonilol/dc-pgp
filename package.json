@@ -1,14 +1,16 @@
 {
     "name": "dcpgp",
     "private": true,
-    "version": "0.1.2",
+    "type": "module",
+    "version": "0.1.3",
     "description": "Vencord userplugin: end-to-end encryption for Discord messages with OpenPGP (dcpgp/1)",
     "license": "GPL-3.0-or-later",
     "engines": {
         "node": ">=20.11"
     },
     "scripts": {
-        "test": "node --import tsx --test tests/*.test.ts"
+        "test": "node --import tsx --test tests/*.test.ts",
+        "simulate": "node sim/start.mjs"
     },
     "dependencies": {
         "@noble/hashes": "2.4.0",

@@ -28,6 +28,8 @@ export const PGP_CONFIG: openpgp.PartialConfig = {
 const FULL_CONFIG: openpgp.Config = { ...openpgp.config, ...PGP_CONFIG } as openpgp.Config;
 
 const MAX_ARMORED_MESSAGE = 64 * 1024;
+/** Encrypted attachments; a little above the 100 MB DcPgp encrypts, for the OpenPGP overhead. */
+export const MAX_BINARY_MESSAGE = 101 * 1024 * 1024;
 const MAX_RECIPIENT_PACKETS = 100;
 export const KEY_LIFETIME_SECONDS = 2 * 365 * 24 * 60 * 60;
 /** Self-/binding signatures per component in the key sent to contacts: each extension adds one (~300 characters). */
@@ -405,11 +407,30 @@ export async function encryptSigned(data: Uint8Array, recipients: PublicKey[], s
     });
 }
 
+/**
+ * An encrypted attachment: like a message (signed, hidden key ids), but binary, with the file's name in the
+ * literal data. GnuPG opens it too: `gpg --decrypt --use-embedded-filename`.
+ */
+export async function encryptFileSigned(data: Uint8Array, filename: string, recipients: PublicKey[], signer: PrivateKey): Promise<Uint8Array> {
+    if (!recipients.length) throw new Error("No recipients");
+    const message = await openpgp.createMessage({ binary: data, filename, format: "binary" });
+    return openpgp.encrypt({
+        message,
+        encryptionKeys: recipients,
+        signingKeys: signer,
+        wildcard: true,
+        format: "binary",
+        config: PGP_CONFIG
+    }) as Promise<Uint8Array>;
+}
+
 /** "expired-key": the stored copy of the signer's key had expired when the message was signed. */
 export type SignatureStatus = "valid" | "invalid" | "unknown-key" | "expired-key" | "missing";
 
 export interface DecryptResult {
     data: Uint8Array;
+    /** The name in the literal data (attachments carry the original file name there). */
+    filename?: string;
     signature: {
         status: SignatureStatus;
         /** Key id (hex) of the key that made the signature, as stated in the signature. */
@@ -432,7 +453,7 @@ export class NotForUsError extends Error {
  * Step 1 of decryption, kept separate so "none of our keys fits" (NotForUsError) can never be
  * confused with "the message was altered" (an error from step 2).
  */
-async function recoverSessionKeys(message: openpgp.Message<string>, decryptionKeys: PrivateKey[]): Promise<openpgp.SessionKey[]> {
+async function recoverSessionKeys(message: openpgp.Message<any>, decryptionKeys: PrivateKey[]): Promise<openpgp.SessionKey[]> {
     let keys: Awaited<ReturnType<typeof openpgp.decryptSessionKeys>>;
     try {
         keys = await openpgp.decryptSessionKeys({ message, decryptionKeys, config: PGP_CONFIG });
@@ -443,16 +464,32 @@ async function recoverSessionKeys(message: openpgp.Message<string>, decryptionKe
     return keys as openpgp.SessionKey[];
 }
 
-export async function readMessageChecked(armored: string): Promise<openpgp.Message<string>> {
-    if (armored.length > MAX_ARMORED_MESSAGE) throw new Error("Message too large");
-    const message = await openpgp.readMessage({ armoredMessage: armored, config: PGP_CONFIG });
+function checkRecipientCount<T extends openpgp.Message<any>>(message: T): T {
     const pkesk = message.packets.filter(p => (p.constructor as any).tag === openpgp.enums.packet.publicKeyEncryptedSessionKey).length;
     if (pkesk > MAX_RECIPIENT_PACKETS) throw new Error("Too many recipient entries");
     return message;
 }
 
+export async function readMessageChecked(armored: string): Promise<openpgp.Message<string>> {
+    if (armored.length > MAX_ARMORED_MESSAGE) throw new Error("Message too large");
+    return checkRecipientCount(await openpgp.readMessage({ armoredMessage: armored, config: PGP_CONFIG }));
+}
+
+async function readBinaryMessageChecked(bytes: Uint8Array): Promise<openpgp.Message<Uint8Array>> {
+    if (bytes.length > MAX_BINARY_MESSAGE) throw new Error("File too large");
+    return checkRecipientCount(await openpgp.readMessage({ binaryMessage: bytes, config: PGP_CONFIG }));
+}
+
 export async function decryptVerified(armored: string, decryptionKeys: PrivateKey[], verificationKeys: PublicKey[]): Promise<DecryptResult> {
-    const message = await readMessageChecked(armored);
+    return decryptMessageVerified(await readMessageChecked(armored), decryptionKeys, verificationKeys);
+}
+
+/** An encrypted attachment; same checks as for a message. */
+export async function decryptFileVerified(bytes: Uint8Array, decryptionKeys: PrivateKey[], verificationKeys: PublicKey[]): Promise<DecryptResult> {
+    return decryptMessageVerified(await readBinaryMessageChecked(bytes), decryptionKeys, verificationKeys);
+}
+
+async function decryptMessageVerified(message: openpgp.Message<any>, decryptionKeys: PrivateKey[], verificationKeys: PublicKey[]): Promise<DecryptResult> {
     const sessionKeys = await recoverSessionKeys(message, decryptionKeys);
     const result = await openpgp.decrypt({
         message,
@@ -464,8 +501,9 @@ export async function decryptVerified(armored: string, decryptionKeys: PrivateKe
     });
 
     const data = result.data as Uint8Array;
+    const filename = typeof result.filename === "string" ? result.filename : undefined;
     const sigs = result.signatures ?? [];
-    if (!sigs.length) return { data, signature: { status: "missing" } };
+    if (!sigs.length) return { data, filename, signature: { status: "missing" } };
 
     const sig = sigs[0];
     const keyId = sig.keyID.toHex();
@@ -478,12 +516,12 @@ export async function decryptVerified(armored: string, decryptionKeys: PrivateKe
     try {
         await sig.verified;
         const signer = verificationKeys.find(k => keyHasKeyId(k, keyId));
-        return { data, signature: { status: "valid", keyId, created, signerFingerprint: signer ? fingerprintOf(signer) : undefined } };
+        return { data, filename, signature: { status: "valid", keyId, created, signerFingerprint: signer ? fingerprintOf(signer) : undefined } };
     } catch (e) {
         const msg = String((e as Error)?.message ?? e);
         const status: SignatureStatus = /key is expired/i.test(msg) ? "expired-key"
             : /Could not find signing key|signing key with key ID/i.test(msg) ? "unknown-key" : "invalid";
-        return { data, signature: { status, keyId, created, error: msg } };
+        return { data, filename, signature: { status, keyId, created, error: msg } };
     }
 }
 

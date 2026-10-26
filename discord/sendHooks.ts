@@ -10,10 +10,12 @@ import type { Channel } from "@vencord/discord-types";
 import { findByProps } from "@webpack";
 import { ChannelStore, DraftStore, MessageStore } from "@webpack/common";
 
+import { readersKey } from "../core/attachments";
 import { isEncryptedContent } from "../core/format";
 import { checkEdit, checkOutgoing, filterDraftState, SILENT_PREFIX } from "../core/guard";
 import { encryptForChannel, type MissingReason, TooLongError } from "../core/send";
 import { toastError } from "../ui/dialogs";
+import { idsForSending, isEncryptedUpload } from "./attachments";
 import { maxMessageLength, planForChannel } from "./discordUtils";
 import { isChannelEncrypted, logger, myId, parsedKey, S } from "./state";
 
@@ -80,9 +82,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 /**
  * Encrypts a text for a chat after every check a send needs; throws Refusal when it must not go out.
- * Shared by sending and editing, so both encrypt for exactly the same readers.
+ * Shared by sending and editing, so both encrypt for exactly the same readers. `attachments` gives the
+ * ids of the files sent along, for the readers the message is encrypted for (or throws Refusal).
  */
-export async function encryptForChat(channelId: string, channel: Channel | null | undefined, text: string, time: number, maxLength: number): Promise<string> {
+export async function encryptForChat(
+    channelId: string, channel: Channel | null | undefined, text: string, time: number, maxLength: number,
+    attachments?: (readers: string, kind: string) => string[]
+): Promise<string> {
     const session = S.session;
     const me = myId();
     if (S.phase !== "unlocked" || !session || !me) throw new Refusal("This chat is encrypted, but DcPgp is locked.");
@@ -92,6 +98,7 @@ export async function encryptForChat(channelId: string, channel: Channel | null 
     if (plan.visibilityUnknown) throw new Refusal("DcPgp cannot check who can see this channel (Discord update?).");
     if (plan.kind === "dm" && plan.missing.length) throw new Refusal(missingText(plan.missing[0]));
     if (!plan.readers.length) throw new Refusal("Nobody in this chat has a stored key.");
+    const ids = attachments?.(readersKey(plan.readers.map(r => ({ userId: r.userId, fpr: r.contact.fpr }))), plan.kind);
 
     const recipients = await Promise.all(plan.readers.map(async r => ({ userId: r.userId, key: await parsedKey(r.contact.publicKey) })));
     let encrypted: string;
@@ -104,7 +111,8 @@ export async function encryptForChat(channelId: string, channel: Channel | null 
             ownPublic: session.ownPublic,
             signer: session.privateKey,
             time,
-            maxLength
+            maxLength,
+            ...(ids?.length ? { attachments: ids } : {})
         }), ENCRYPT_TIMEOUT_MS);
     } catch (e) {
         if (e instanceof TooLongError) throw new Refusal(e.message);
@@ -122,17 +130,27 @@ async function encryptOutgoing(channelId: string, msg: MessageObject, options: S
         return cancel("This chat is encrypted, but DcPgp is locked. Message NOT sent.");
     if (options?.alsoForwardToChannelId)
         return cancel("\"Also send to channel\" does not work with encrypted messages. Message NOT sent.");
-    if (props?.hasAttachments)
-        return cancel("Attachments are not encrypted yet. Message NOT sent.");
 
     const raw = typeof msg.content === "string" ? msg.content : "";
     const silent = raw.startsWith(SILENT_PREFIX);
     const text = silent ? raw.slice(SILENT_PREFIX.length) : raw;
-    if (!text.trim()) return;
+    // Files alone still need the signed message that lists them.
+    const files = !!props?.hasAttachments;
+    if (!text.trim() && !files) return;
+
+    // DcPgp encrypted the files when they were attached; here they are checked and listed in the message.
+    const attachments = files
+        ? (readers: string, kind: string) => {
+            if (kind !== "dm") throw new Refusal("Encrypted attachments work in 1:1 DMs.");
+            const result = idsForSending(channelId, readers);
+            if ("error" in result) throw new Refusal(result.error);
+            return result.ids;
+        }
+        : undefined;
 
     let encrypted: string;
     try {
-        encrypted = await encryptForChat(channelId, props?.channel, text, intendedTime(options), maxMessageLength() - (silent ? SILENT_PREFIX.length : 0));
+        encrypted = await encryptForChat(channelId, props?.channel, text, intendedTime(options), maxMessageLength() - (silent ? SILENT_PREFIX.length : 0), attachments);
     } catch (e) {
         if (e instanceof Refusal) return cancel(`${e.message} Message NOT sent.`);
         throw e;
@@ -223,12 +241,14 @@ const guardedSend = (original: AnyFn) => function (this: unknown, ...args: any[]
         const fromComposer = isComposer(options);
         const seen = isObj && seenByHook.has(message);
         if (fromComposer && !seen) noteHookProblem("A message from the chat input did not pass the send hook.");
+        const uploads: unknown[] = Array.isArray(options?.attachmentsToUpload) ? options.attachmentsToUpload : [];
         const verdict = checkOutgoing({
             encrypted: isChannelEncrypted(channelId),
             content,
             expected: isObj ? expected.get(message) : undefined,
             allowedPlain: false,
             hasPoll: options?.poll != null,
+            foreignUploads: uploads.filter(u => !isEncryptedUpload(u)).length,
             fromComposer,
             seenByHook: seen
         });

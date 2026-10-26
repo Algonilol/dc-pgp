@@ -38,6 +38,7 @@ More details: [PROTOCOL.md](PROTOCOL.md) (wire format, key lifetime, vault) · [
 - **Made for 1:1 DMs**; group DMs and server channels work too: each message is readable for everyone in the chat whose key you have – in a server channel, for those who can see the channel (in a thread: the channel it belongs to).
 - **Signed metadata inside the encryption** (sender, chat, recipients, time) exposes re-posted, forwarded or replayed messages.
 - **Edit encrypted messages** as usual: the edit box shows your plaintext, and saving encrypts the new text again for the same chat. Discord keeps the edit box in memory only, and DcPgp closes it when it locks.
+- **Encrypted files in DMs**: attach pictures, videos, audio or any other file as usual (up to 100 MB). DcPgp encrypts each file the moment you attach it, before Discord's upload starts; your contact sees pictures, videos and audio right in the chat and saves any file with one click. The message lists its files, signed, so none can be swapped.
 - **Fail-closed send protection**: in an encrypted chat nothing leaves unencrypted. The plugin is the first pre-send hook, an emergency brake guards Discord's own send and edit functions, drafts of encrypted chats are never written to disk, and a check verifies that your own messages arrive at Discord encrypted.
 - **Local vault** for your key and contacts (AES-256-GCM), unlocked with a password (Argon2id, 256 MiB) and bound to your PC through Windows DPAPI – or "RAM only" mode, where nothing secret is stored and you unlock with your key file.
 - **Unlock with Windows**, if you'd rather not type a password: DcPgp opens by itself when Discord starts and when you unlock Windows, protected by your Windows account. Choose it during setup or in the settings.
@@ -50,8 +51,8 @@ More details: [PROTOCOL.md](PROTOCOL.md) (wire format, key lifetime, vault) · [
 
 ## What it does not protect
 
-- **Metadata**: Discord still sees who writes to whom, when, and roughly how long each message is.
-- **Anything but message text**: attachments, embeds, reactions, polls and voice are not encrypted. Attachments and polls are blocked in encrypted chats.
+- **Metadata**: Discord still sees who writes to whom, when, roughly how long each message is and how large each file is.
+- **Anything but message text and DM files**: reactions, polls and voice are not encrypted; polls are blocked in encrypted chats, and so are files outside 1:1 DMs.
 - **A compromised PC** (malware, keyloggers) or a malicious Discord client update.
 - **The other person**: they can screenshot or forward what they decrypted.
 - **People without the plugin** – including Discord on mobile – only see ciphertext.
@@ -123,7 +124,8 @@ Your vault actions (change password, save key file, show or remove the stored pr
 
 ## Security notes
 
-- **No connections of its own.** DcPgp sends nothing anywhere except the messages you send through Discord itself: no telemetry, no update checks, no servers of its own. Like every Vencord plugin it runs inside Discord with full access to the client – the code is open, so you can check that.
+- **No connections of its own.** DcPgp only talks to Discord: it sends your messages through Discord and downloads encrypted files from Discord's own servers (cdn.discordapp.com) to decrypt them. No telemetry, no update checks, no servers of its own. Like every Vencord plugin it runs inside Discord with full access to the client – the code is open, so you can check that.
+- **Files are encrypted before Discord sees them.** Discord uploads an attachment the moment you add it, so DcPgp encrypts it at that point. Discord gets a neutral name (`dcpgp-1.pgp`) and the size; name, type and content stay encrypted. Decrypted files exist only in memory until you save one.
 - **Compare safety numbers.** Until you do, a contact's key is trusted on first use – Discord carried it, so Discord could have swapped it.
 - **Your password cannot be reset.** The key file (with its own password) is your only recovery. Keep it offline, e.g. on a USB stick.
 - **The vault is bound to this PC.** The vault password alone does not open it elsewhere, because a device key protected by Windows (DPAPI) is mixed in. To move to another PC, use a vault backup or your key file.
@@ -137,13 +139,13 @@ Details: [SECURITY.md](SECURITY.md) (threat model, reporting vulnerabilities) an
 
 ## Known limitations
 
-- **Attachments and polls** are not encrypted; they are blocked in encrypted chats.
+- **Polls** can't be encrypted – Discord counts the votes itself, and its poll fields are too short for encrypted text – so they are blocked in encrypted chats. **Files** are encrypted in 1:1 DMs only; elsewhere they are blocked in encrypted chats. A file someone else's older DcPgp version can't open shows as a plain `dcpgp-1.pgp` (GnuPG opens it: `gpg --decrypt --use-embedded-filename`).
 - **Mentions** inside an encrypted message don't ping: Discord cannot see them. Reply previews and notifications show only the "Encrypted message" header.
 - **Message length**: about 800 characters of text per message without Nitro, about 2,270 with Nitro (plain text; umlauts and emoji take more). Longer messages are refused instead of being cut off.
 - **Group DMs and server channels** are less tested than 1:1 DMs; a message is encrypted to at most 50 readers. Contacts you only write to there receive your extended key only when they ask for it.
 - **Text you copy with Ctrl+C** stays in the clipboard; only DcPgp's own copy buttons clear it.
 - **Deleted data may linger on disk**: Discord's storage (IndexedDB) does not overwrite removed entries right away.
-- **Tested so far only by the author**, with two accounts in the Discord desktop app on Windows 11. macOS and Linux are untested; the device key uses the system's keychain there instead of DPAPI.
+- **Tested so far only by the author**, with two accounts in the Discord desktop app on Windows 11. Every change also runs through an automated simulation of two accounts on a simulated Discord (`npm run simulate`) that checks Discord never receives plaintext – it does not replace a test in the real app. macOS and Linux are untested; the device key uses the system's keychain there instead of DPAPI.
 - The interface is English only.
 
 ## Development
@@ -151,16 +153,18 @@ Details: [SECURITY.md](SECURITY.md) (threat model, reporting vulnerabilities) an
 ```powershell
 npm ci
 npm test
+npm run simulate
 ```
 
-The tests run on plain Node.js (test runner + tsx) and need neither Discord nor Vencord.
+The tests run on plain Node.js (test runner + tsx) and need neither Discord nor Vencord. `npm run simulate` runs the real plugin against a simulated Discord with two accounts – setup, key exchange, messages, edits, files, attacks by the server, leak attempts, locking – and checks at the end that the simulated Discord never received plaintext.
 
 | Folder | Content |
 |---|---|
 | `core/` | All decisions and cryptography as pure functions, covered by `tests/` |
 | `discord/` | The glue to Discord and Vencord: hooks, flux events, vault state, auto-lock, key renewal |
 | `ui/` | Dialogs, the lock menu and the message rendering |
-| `native.ts` | Main-process helpers: device key (DPAPI), idle time and power events, clipboard clearing, file dialogs |
+| `native.ts` | Main-process helpers: device key (DPAPI), idle time and power events, clipboard clearing, file dialogs, downloading encrypted files from Discord's CDN |
+| `sim/` | The simulated Discord for `npm run simulate` |
 
 ## Feedback and contributing
 

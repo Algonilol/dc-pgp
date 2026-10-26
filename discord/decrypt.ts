@@ -113,7 +113,8 @@ function remember(key: string, item: CacheItem) {
     while (cache.size > MAX_ENTRIES) cache.delete(cache.keys().next().value!);
 }
 
-async function receiveKeysFor(authorId: string, channelId: string): Promise<ReceiveKeys> {
+/** The keys to decrypt and check a message (or attachment) by this author. */
+export async function keysForMessage(authorId: string, channelId: string): Promise<ReceiveKeys> {
     const session = S.session!;
     const contact = session.data.contacts[authorId] ?? null;
     const author = contact ? {
@@ -163,7 +164,7 @@ function enqueue(key: string, message: MessageLike, armored: string) {
         const gen = generation;
         let entry: DecryptEntry;
         try {
-            const keys = await receiveKeysFor(authorId, channelId);
+            const keys = await keysForMessage(authorId, channelId);
             entry = { status: "ok", view: await decryptForDisplay(armored, { authorId, channelId, myId: me, discordTimeMs: time }, keys) };
         } catch (e) {
             if (e instanceof NotForUsError) entry = { status: "not-for-us" };
@@ -180,8 +181,14 @@ function enqueue(key: string, message: MessageLike, armored: string) {
     pump();
 }
 
-/** The local copy of a message that is still being sent: it has the same content as the server's copy. */
-const isSending = (message: MessageLike) => message.state === "SENDING" || message.state === "SEND_FAILED";
+/**
+ * Local copies of messages being sent, as Discord dispatched them ("optimistic"): the client sets that flag
+ * itself, so a server can't fake it. They have the same content as the server's copy that follows.
+ */
+const optimisticCopies = new WeakSet<object>();
+
+const isSending = (message: MessageLike) =>
+    optimisticCopies.has(message) || message.state === "SENDING" || message.state === "SEND_FAILED";
 
 /** Notes a decrypted message for the copy check; if an earlier one shows up later, the other becomes the copy. */
 function recordCopy(message: MessageLike, view: DecryptedView) {
@@ -350,6 +357,7 @@ function adoptOptimistic(nonce: string, message: MessageLike, parsed: ParsedCont
 /** Flux MESSAGE_CREATE, also for optimistic copies of messages we are sending. */
 export function handleMessageCreate(message: any, optimistic: boolean) {
     if (typeof message?.id !== "string" || typeof message.channel_id !== "string") return;
+    if (optimistic) optimisticCopies.add(message);
     const parsed = parseContent(message.content);
     const me = myId();
     const own = me != null && message.author?.id === me;

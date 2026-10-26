@@ -25,6 +25,10 @@ const META_PREFIX = "\n-- dcpgp/1;";
 const MAX_CONTENT_SCAN = 25_000;
 const SNOWFLAKE = /^\d{1,25}$/;
 const MAX_RECIPIENT_IDS = 200;
+/** Attachment ids: 128 bits of SHA-256 over the encrypted file, base64url (core/attachments.ts). */
+const ATTACHMENT_ID = /^[A-Za-z0-9_-]{22}$/;
+/** Discord's limit per message. */
+export const MAX_ATTACHMENTS = 10;
 
 const MESSAGE_BLOCK = /-----BEGIN PGP MESSAGE-----\r?\n[\s\S]+?\r?\n-----END PGP MESSAGE-----/;
 const KEY_BLOCK = /-----BEGIN PGP PUBLIC KEY BLOCK-----\r?\n[\s\S]+?\r?\n-----END PGP PUBLIC KEY BLOCK-----/;
@@ -85,13 +89,18 @@ export interface InnerMeta {
     recipients: string[];
     /** Intended send time in ms since epoch. */
     time: number;
+    /** Ids of the encrypted attachments that belong to this message, in order. */
+    attachments?: string[];
 }
 
 /** Plaintext plus a signed metadata line, padded to a multiple of 64 bytes. */
 export function buildInner(text: string, meta: InnerMeta): Uint8Array {
     for (const id of [meta.sender, meta.channel, ...meta.recipients])
         if (!SNOWFLAKE.test(id)) throw new Error("Invalid Discord ID: " + id);
-    const head = `${text}${META_PREFIX}s=${meta.sender};c=${meta.channel};r=${meta.recipients.join(",")};t=${Math.floor(meta.time)};p=`;
+    const attachments = meta.attachments ?? [];
+    if (attachments.length > MAX_ATTACHMENTS || !attachments.every(a => ATTACHMENT_ID.test(a))) throw new Error("Invalid attachment list");
+    const files = attachments.length ? `a=${attachments.join(",")};` : "";
+    const head = `${text}${META_PREFIX}s=${meta.sender};c=${meta.channel};r=${meta.recipients.join(",")};t=${Math.floor(meta.time)};${files}p=`;
     const len = utf8Length(head);
     const pad = (PAD_BLOCK - (len % PAD_BLOCK)) % PAD_BLOCK;
     return utf8(head + randomUrlSafe(pad));
@@ -117,15 +126,18 @@ export function parseInner(bytes: Uint8Array): ParsedInner {
     }
 
     const recipients = fields.r ? fields.r.split(",") : [];
+    const attachments = fields.a ? fields.a.split(",") : [];
     const time = Number(fields.t);
     const valid = SNOWFLAKE.test(fields.s ?? "")
         && SNOWFLAKE.test(fields.c ?? "")
         && recipients.length <= MAX_RECIPIENT_IDS
         && recipients.every(r => SNOWFLAKE.test(r))
+        && attachments.length <= MAX_ATTACHMENTS
+        && attachments.every(a => ATTACHMENT_ID.test(a))
         && Number.isSafeInteger(time) && time >= 0;
     if (!valid) return { text, meta: null, metaError: "metadata damaged" };
 
-    return { text, meta: { sender: fields.s, channel: fields.c, recipients, time } };
+    return { text, meta: { sender: fields.s, channel: fields.c, recipients, time, ...(attachments.length ? { attachments } : {}) } };
 }
 
 const DISCORD_EPOCH = 1420070400000n;

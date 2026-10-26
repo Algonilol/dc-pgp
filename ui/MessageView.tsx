@@ -9,17 +9,21 @@ import { find } from "@webpack";
 import { ChannelStore, EditMessageStore, Parser, Tooltip, useEffect, useLayoutEffect, useState, useStateFromStores } from "@webpack/common";
 import type { ReactNode } from "react";
 
+import { formatSize, isEncryptedFileName } from "../core/attachments";
 import { canViewRawPgp, effectiveAutoDecrypt, hidesOriginal, messageDisplay, type PlaceholderReason, shouldMarkUnencrypted } from "../core/display";
 import { type KeyCardActionId, keyCardModel } from "../core/exchange";
 import { type KeyMessageKind, parseContent, snowflakeToMs } from "../core/format";
 import { formatFingerprint } from "../core/pgp";
 import { type DecryptedView, markRepeated } from "../core/receive";
+import { type DiscordAttachment, openAttachment, type OpenedFile, saveOpenedFile } from "../discord/attachments";
 import { type DecryptEntry, isRepeatedMessage, type MessageLike, revealMessage, useDecryption } from "../discord/decrypt";
 import { channelKind, nameOf } from "../discord/discordUtils";
-import { hideOriginalContent } from "../discord/hide";
+import { hideEncryptedFileCards, hideOriginalContent } from "../discord/hide";
 import { actOnKeyMessage, checkOfferedKey, type KeyCheck, openVerifyDialog } from "../discord/keyExchange";
 import { myId, useDcPgpState } from "../discord/state";
 import { settings } from "../settings";
+import { errorText } from "./common";
+import { toastError, toastSuccess } from "./dialogs";
 import { LockIcon } from "./icons";
 import { openRawCiphertextModal, RawCiphertextView } from "./RawCiphertextView";
 import { openSetupModal } from "./SetupModal";
@@ -27,6 +31,7 @@ import { requestUnlock } from "./UnlockModal";
 
 interface AccessoryMessage extends MessageLike {
     type?: number;
+    attachments?: DiscordAttachment[];
 }
 
 const isMarkupClass = (v: unknown): v is string => typeof v === "string" && /^markup_[\w-]+$/.test(v);
@@ -117,7 +122,65 @@ function Decrypted({ entry, message, blur, repeated }: { entry: DecryptEntry | n
                 <TrustBadge view={view} />
                 {message.editedTimestamp ? <span className="dcpgp-edited">(edited)</span> : null}
             </div>
+            <EncryptedFiles message={message} view={view} blur={blur} />
             {warnings.map(f => <div key={f.code} className="dcpgp-warning">⚠ {f.text}</div>)}
+        </div>
+    );
+}
+
+/** One encrypted file of a decrypted message: downloaded, checked against the message and decrypted, in memory only. */
+function FileView({ message, view, attachment, blur }: { message: AccessoryMessage; view: DecryptedView; attachment: DiscordAttachment; blur: boolean; }) {
+    const [file, setFile] = useState<OpenedFile | null>(null);
+    const [force, setForce] = useState(false);
+    useEffect(() => {
+        let alive = true;
+        setFile(null);
+        openAttachment(message, view, attachment, force).then(f => { if (alive) setFile(f); });
+        return () => { alive = false; };
+    }, [message.id, attachment.id, view.contentId, force]);
+
+    if (!file) return <Note text="Decrypting file …" />;
+    if (file.status === "error") return <div className="dcpgp-alert">⚠ {file.message}</div>;
+    if (file.status === "large")
+        return (
+            <div className="dcpgp-file">
+                <span className="dcpgp-file-name">Encrypted file</span>
+                <span className="dcpgp-file-meta">{formatSize(file.size)}</span>
+                <TextButton variant="link" onClick={() => setForce(true)}>Decrypt</TextButton>
+            </div>
+        );
+
+    const media = [
+        "dcpgp-media",
+        blur && "dcpgp-blur"
+    ].filter(Boolean).join(" ");
+    const save = () => saveOpenedFile(file)
+        .then(path => { if (path) toastSuccess(`Saved: ${path}`); })
+        .catch(e => toastError(errorText(e)));
+    return (
+        <>
+            {file.kind === "image" && <img className={media} src={file.url} alt={file.name} />}
+            {file.kind === "video" && <video className={media} src={file.url} controls preload="metadata" />}
+            {file.kind === "audio" && <audio src={file.url} controls preload="metadata" />}
+            <div className="dcpgp-file">
+                <span className="dcpgp-file-name">{file.name}</span>
+                <span className="dcpgp-file-meta">{formatSize(file.size)} · end-to-end encrypted</span>
+                <TextButton variant="link" onClick={save}>Save …</TextButton>
+            </div>
+        </>
+    );
+}
+
+/** The message's encrypted files in place of Discord's cards for dcpgp-N.pgp. */
+function EncryptedFiles({ message, view, blur }: { message: AccessoryMessage; view: DecryptedView; blur: boolean; }) {
+    const files = (message.attachments ?? []).filter(a => isEncryptedFileName(a?.filename));
+    const listed = view.meta?.attachments?.length ?? 0;
+    useLayoutEffect(() => files.length ? hideEncryptedFileCards(message.id) : undefined, [message.id, files.length > 0]);
+    if (!files.length && !listed) return null;
+    return (
+        <div className="dcpgp-attachments">
+            {files.map(a => <FileView key={a.id} message={message} view={view} attachment={a} blur={blur} />)}
+            {listed > files.length && <div className="dcpgp-warning">⚠ {listed - files.length} of the message's files are missing.</div>}
         </div>
     );
 }

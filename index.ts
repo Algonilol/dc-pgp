@@ -7,6 +7,7 @@ import { addMessageAccessory, removeMessageAccessory } from "@api/MessageAccesso
 import definePlugin from "@utils/types";
 import { UserStore } from "@webpack/common";
 
+import { installAttachmentProtection, uninstallAttachmentProtection } from "./discord/attachments";
 import { startAutolock, stopAutolock } from "./discord/autolock";
 import { handleMessageCreate, handleMessageUpdate, startDecryption, stopDecryption } from "./discord/decrypt";
 import { installEditProtection, uninstallEditProtection } from "./discord/edits";
@@ -27,7 +28,7 @@ const ACCESSORY_ID = "dcpgp-message";
 let unlockPrompted = false;
 
 function protect() {
-    for (const problem of [...installSendProtection(), ...installEditProtection()]) logger.warn(problem);
+    for (const problem of [...installSendProtection(), ...installEditProtection(), ...installAttachmentProtection()]) logger.warn(problem);
 }
 
 function maybePromptUnlock() {
@@ -106,6 +107,7 @@ export default definePlugin({
     stop() {
         stopAutolock();
         uninstallEditProtection();
+        uninstallAttachmentProtection();
         uninstallSendProtection();
         removeMessageAccessory(ACCESSORY_ID);
         stopDecryption();

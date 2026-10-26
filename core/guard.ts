@@ -34,7 +34,7 @@ export function isExactProtocolContent(content: string, messagesOnly = false): b
 
 export type Verdict =
     | { ok: true; }
-    | { ok: false; reason: "modified" | "poll" | "hook-missing" | "plaintext"; message: string; };
+    | { ok: false; reason: "modified" | "poll" | "attachment" | "hook-missing" | "plaintext"; message: string; };
 
 const OK: Verdict = { ok: true };
 
@@ -47,6 +47,8 @@ export interface OutgoingCheck {
     /** The user explicitly chose to send this one message unencrypted. */
     allowedPlain: boolean;
     hasPoll: boolean;
+    /** Files to upload with the message that DcPgp did not encrypt. */
+    foreignUploads?: number;
     /** The send comes from the chat input, where our hook must have run first. */
     fromComposer: boolean;
     seenByHook: boolean;
@@ -59,6 +61,9 @@ export function checkOutgoing(c: OutgoingCheck): Verdict {
     if (!c.encrypted || c.allowedPlain) return OK;
     if (c.hasPoll)
         return { ok: false, reason: "poll", message: "Polls are not encrypted and are blocked in encrypted chats." };
+    // Also for messages without text: a file upload carries content of its own.
+    if (c.foreignUploads)
+        return { ok: false, reason: "attachment", message: "This chat is encrypted, but an attachment is not. It was NOT sent." };
     if (!c.content.trim()) return OK;
     if (c.expected !== undefined || isExactProtocolContent(c.content)) return OK;
     if (c.fromComposer && !c.seenByHook)

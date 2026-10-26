@@ -9,6 +9,7 @@ import { addMessagePreEditListener, type MessageEditListener, type MessageObject
 import { plugins } from "@api/PluginManager";
 import { EditMessageStore, FluxDispatcher, MessageActions, MessageStore } from "@webpack/common";
 
+import { isEncryptedFileName } from "../core/attachments";
 import { editSave, editStart } from "../core/edit";
 import { parseContent } from "../core/format";
 import { getDecryption, peekDecryption, whenDecrypted } from "./decrypt";
@@ -61,7 +62,8 @@ function interceptStartEdit(action: any): boolean {
 }
 
 async function encryptEdit(channelId: string, messageId: string, msg: MessageObject) {
-    const originalContent = MessageStore.getMessage(channelId, messageId)?.content ?? "";
+    const original = MessageStore.getMessage(channelId, messageId);
+    const originalContent = original?.content ?? "";
     const parsed = parseContent(originalContent);
     const text = typeof msg.content === "string" ? msg.content : "";
     const previous = parsed.kind === "message" ? peekDecryption(messageId, parsed.armored) : undefined;
@@ -81,7 +83,11 @@ async function encryptEdit(channelId: string, messageId: string, msg: MessageObj
             msg.content = originalContent;
             return;
         case "encrypt": {
-            const encrypted = await encryptForChat(channelId, null, text, Date.now(), maxMessageLength());
+            // The files stay; the edited message must list them again, signed.
+            const files = (original?.attachments ?? []).filter((a: any) => isEncryptedFileName(a?.filename));
+            const listed = previous?.status === "ok" ? previous.view?.meta?.attachments : undefined;
+            if (files.length && !listed) throw new Refusal("The message's files could not be checked.");
+            const encrypted = await encryptForChat(channelId, null, text, Date.now(), maxMessageLength(), listed ? () => listed : undefined);
             msg.content = encrypted;
             expectContent(msg, encrypted);
         }

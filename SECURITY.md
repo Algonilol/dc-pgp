@@ -20,7 +20,7 @@ Helpful in a report: what an attacker needs (position, access), what they gain, 
 
 - malware, other Vencord plugins, or anyone controlling your Windows account while DcPgp is unlocked – with "Unlock with Windows" switched on, also while it is locked;
 - a malicious Discord client update that bypasses the plugin;
-- metadata: who writes to whom, when, how often and roughly how much;
+- metadata: who writes to whom, when, how often and roughly how much (including the size of files);
 - your contacts: they see the plaintext and can copy it;
 - key substitution before safety numbers are compared (trust on first use).
 

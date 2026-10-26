@@ -168,6 +168,48 @@ export function clearClipboardIfEquals(_: IpcMainInvokeEvent, fullText: string):
     }
 }
 
+const ATTACHMENT_HOSTS = new Set(["cdn.discordapp.com", "media.discordapp.net"]);
+const MAX_DOWNLOAD_BYTES = 101 * 1024 * 1024;
+
+/**
+ * Downloads an encrypted attachment – from Discord's CDN only, so this can't be used to reach anything else.
+ * Here rather than in the renderer: no CORS, and Discord's page never touches the file.
+ */
+export async function fetchAttachment(_: IpcMainInvokeEvent, url: string): Promise<Uint8Array> {
+    let target: URL;
+    try {
+        target = new URL(String(url));
+    } catch {
+        throw new Error("invalid url");
+    }
+    if (target.protocol !== "https:" || !ATTACHMENT_HOSTS.has(target.hostname) || !/^\/(ephemeral-)?attachments\//.test(target.pathname))
+        throw new Error("not a Discord attachment");
+    const res = await fetch(target);
+    // A redirect may only lead to Discord's CDN as well.
+    const final = new URL(res.url || target.href);
+    if (final.protocol !== "https:" || !ATTACHMENT_HOSTS.has(final.hostname)) throw new Error("redirected away from Discord's CDN");
+    if (!res.ok) throw new Error(`download failed (HTTP ${res.status})`);
+    const length = Number(res.headers.get("content-length") ?? 0);
+    if (length > MAX_DOWNLOAD_BYTES) throw new Error("file too large");
+    const body = new Uint8Array(await res.arrayBuffer());
+    if (body.length > MAX_DOWNLOAD_BYTES) throw new Error("file too large");
+    return body;
+}
+
+/** Shows a native save dialog and writes a decrypted attachment. Returns the chosen path or null if cancelled. */
+export async function saveBinaryFile(_: IpcMainInvokeEvent, defaultName: string, content: Uint8Array): Promise<string | null> {
+    if (!(content instanceof Uint8Array)) throw new Error("invalid input");
+    const safeName = String(defaultName).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(0, 120) || "attachment";
+    const result = await dialog.showSaveDialog({
+        title: "DcPgp – Save decrypted file",
+        defaultPath: join(app.getPath("downloads"), safeName),
+        filters: [{ name: "All files", extensions: ["*"] }]
+    });
+    if (result.canceled || !result.filePath) return null;
+    await writeFile(result.filePath, content, { mode: 0o600 });
+    return result.filePath;
+}
+
 /** Shows a native save dialog and writes the text. Returns the chosen path or null if cancelled. */
 export async function saveTextFile(_: IpcMainInvokeEvent, defaultName: string, content: string, extension: "asc" | "dcpgp" = "asc"): Promise<string | null> {
     const safeName = String(defaultName).replace(/[\\/:*?"<>|]/g, "_").slice(0, 120) || "dcpgp.asc";

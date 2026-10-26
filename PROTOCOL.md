@@ -31,10 +31,11 @@ An **edit** replaces the content with a new message of the same format: encrypte
 ### Inner plaintext
 
 ```
-<text>\n-- dcpgp/1;s=<sender id>;c=<channel id>;r=<recipient ids, comma-separated>;t=<intended send time, ms>;p=<padding>
+<text>\n-- dcpgp/1;s=<sender id>;c=<channel id>;r=<recipient ids, comma-separated>;t=<intended send time, ms>;a=<attachment ids>;p=<padding>
 ```
 
 - The **last** occurrence of `\n-- dcpgp/1;` counts, so a line typed into the text cannot override the metadata.
+- `a` (only with encrypted files) lists the message's files in order, at most 10; see [Encrypted files](#encrypted-files). Parsers that don't know it ignore it.
 - `p` is random URL-safe padding that brings the UTF-8 length to a multiple of 64 bytes.
 
 ### Checks on receipt
@@ -50,6 +51,17 @@ An **edit** replaces the content with a new message of the same format: encrypte
 | No earlier message (by Discord's time, a later edit counting as new; then by snowflake id) decrypted since unlocking has the same decrypted content (SHA-256), whatever the armor looks like | warning: replayed or re-posted copy |
 
 A signature made after the stored copy of the author's key expired cannot be checked. It is reported as such – an error, not "forged" – and checked again once an updated copy of the key arrives.
+
+### Encrypted files
+
+1:1 DMs only. Discord uploads an attachment as soon as it is added to the chat input, so a file is encrypted at that moment, not on sending:
+
+- The file becomes an OpenPGP message like a text message (signed, every reader and the sender as recipients, wildcard key ids, SEIPD v1, AES-256, no compression), but **binary**, with the original file name in the literal data. GnuPG opens it: `gpg --decrypt --use-embedded-filename`.
+- Discord gets it as `dcpgp-<n>.pgp`, with no alt text and no spoiler flag.
+- Its **id** is the first 128 bits of SHA-256 over the encrypted file, base64url (22 characters). The message sent with the files lists their ids in `a`, so the signature over the message covers which files belong to it; a message with files and no text still carries this list.
+- Files are encrypted for the chat's readers at the time of attaching. If they changed before sending (a new key), the message is refused and the files have to be attached again.
+
+On receipt, a file is downloaded from Discord's CDN, its id must be in the message's `a` list, it must decrypt for the reader, and its signature must be by the key that signed the message – otherwise it is not shown. Pictures (PNG, JPEG, GIF, WebP, AVIF), videos (MP4, WebM) and audio (MP3, Ogg, Opus, WAV, M4A, FLAC) are shown inline, chosen by the file name's extension; everything else, SVG and HTML included, is only offered for saving. Displayed names lose paths, control characters and direction marks. An edit keeps the message's `a` list.
 
 Trust levels: **verified** (signature fine, the contact's safety number was compared, and no warning), **unverified**, **failed** (any error).
 

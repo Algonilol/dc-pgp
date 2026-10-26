@@ -23,7 +23,10 @@ In the plugin folder:
 ```powershell
 npm ci
 npm test
+npm run simulate
 ```
+
+`npm run simulate` drives the real plugin through two accounts on a simulated Discord and fails if anything that should stay encrypted reaches it. Add a step there for every new flow.
 
 In the Vencord folder:
 
